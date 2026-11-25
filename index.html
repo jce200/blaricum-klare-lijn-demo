@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blaricum in klare lijn</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="stijl.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }
+  </script>
+</head>
+<body>
+  <header class="balk">
+    <img class="merk" src="woordmerk.svg" alt="Monastic">
+    <nav class="keuze" aria-label="Standpunt">
+      <button type="button" data-stand="hoekpand">Het hoekpand</button>
+      <button type="button" data-stand="kruising">De kruising</button>
+      <button type="button" data-stand="erf">Het erf</button>
+      <button type="button" data-stand="straat">De straat</button>
+      <button type="button" data-stand="plein">Het plein</button>
+      <button type="button" data-stand="dorp">Het dorp</button>
+    </nav>
+    <nav class="keuze" aria-label="Licht">
+      <button type="button" data-licht="middag">Middag</button>
+      <button type="button" data-licht="avond">Avond</button>
+      <button type="button" data-licht="schemer">Schemer</button>
+    </nav>
+    <nav class="keuze" aria-label="Inkleuring">
+      <button type="button" data-stijl="gedempt">Gedempt</button>
+      <button type="button" data-stijl="helder">Helder</button>
+      <button type="button" data-stijl="warm">Warm</button>
+      <button type="button" data-stijl="fris">Fris</button>
+    </nav>
+    <div class="keuze" aria-label="Animatie">
+      <button type="button" id="intro-knop" class="actie" aria-pressed="false">Intro</button>
+      <button type="button" id="rondleiding" class="actie" aria-pressed="false">Rondleiding</button>
+    </div>
+  </header>
+  <main class="kader">
+    <canvas id="doek"></canvas>
+    <aside class="cartouche" id="cartouche" aria-live="polite">
+      <strong id="cartouche-titel">Het hoekpand · Middag</strong>
+      <span id="cartouche-sub">Hoek Meentweg en Huizerweg, Blaricum</span>
+    </aside>
+    <p class="melding" id="melding">Het dorp wordt getekend.</p>
+  </main>
+  <p class="voet">Sleep om te draaien, scrol om in te zoomen · toetsen 1–6 voor standpunten, I voor de Porsche-intro, spatie voor rondleiding.</p>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
