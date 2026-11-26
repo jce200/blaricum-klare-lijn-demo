@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STIJLEN } from './stijlen.js';
 import { STEMMINGEN, paletRij, zonRichting, hex } from './stemmingen.js';
+import { bouwIntercom, bouwBezoeker, INTERCOM_POS, INTERCOM_NORMAAL } from './verhaal.js';
 
 const vraag = new URLSearchParams(location.search);
 const getal = (naam, anders) => (vraag.has(naam) ? Number(vraag.get(naam)) : anders);
@@ -47,12 +48,12 @@ const SLAGMAAT = isMobiel ? 2048 : 4096;       // compacter op telefoon voor geh
 const renderer = new THREE.WebGLRenderer({ canvas: doek, antialias: !isMobiel, powerPreference: 'high-performance', preserveDrawingBuffer: vraag.has('afdruk') });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobiel ? 1.5 : 2));
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.4, 4000);
+const camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.12, 4000);
 const stuur = new OrbitControls(camera, doek);
 stuur.enableDamping = true;
 stuur.dampingFactor = 0.08;
 stuur.maxPolarAngle = Math.PI * 0.497;
-stuur.minDistance = 3;
+stuur.minDistance = 0.45;
 stuur.maxDistance = 600;
 // Een eigen standpunt uit de adresbalk, om een plek te zoeken: ?oog=x,y,z&doel=x,y,z&hoek=40&stand=eigen
 if (vraag.has('oog')) {
@@ -329,7 +330,10 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
 
       if (s != ${id.lamp}) {
         float lp = klLamp(vP, n);
-        if (lp > 0.001) k = mix(k, uLampKleur, 0.75 * lp);
+        if (lp > 0.001) {
+          float invloed = (s == ${id.porsche} || s == ${id.autowiel}) ? 0.14 : 0.75;
+          k = mix(k, uLampKleur, invloed * lp);
+        }
       }
 
       gl_FragColor = vec4(klNevel(k, length(cameraPosition - vP)), 1.0);
@@ -557,15 +561,17 @@ const STAND_INFO = {
   hoekpand: ['Het hoekpand', 'Hoek Meentweg en Huizerweg, Blaricum'],
   kruising: ['De kruising', 'Zicht op het hoekpand en Bistrot Chapeau'],
   wijzer: ['De handwijzer', 'Bij de straatlantaarn met zicht op het hoekpand en de maan'],
-  erf: ['Het erf', 'Achterzijde en hagen langs de Huizerweg'],
+  erf: ['Het erf · Kantoor', 'De Porsche op de oprit bij de Monastic-intercom'],
   straat: ['De straat', 'Terras bij Bistrot Chapeau en de kruising'],
-  plein: ['Albert Heijn', 'De klassieke Porsche 930 in het parkeervak'],
+  plein: ['Het plein', 'Langs de Albert Heijn en het dorpscentrum'],
   dorp: ['Het dorp', 'Vogelvlucht over het centrum van Blaricum'],
 };
 
 let standNaam = 'hoekpand';
 let kleurReis = null;
 let porsche = null;
+let intercom = null;
+let bezoeker = null;
 let vogels = null;
 let rondleiding = null;
 let intro = null;
@@ -643,6 +649,7 @@ function pasKleurToe(a, b, t) {
     const br = LICHT.uBrandt.value;
     lampPitMat.color.setRGB(0.85 + 0.15 * br, 0.88 + 0.08 * br, 0.90 - 0.22 * br);
   }
+  if (intercom && !intro) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, 0);
   if (porsche) porsche.zetLicht(LICHT.uBrandt.value, LICHT.uInktKleur.value, lichtNaam);
 }
 
@@ -1247,6 +1254,34 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   achterBalk.renderOrder = 11;
   chassis.add(achterBalk);
 
+  // Opengaand bestuurdersportier (+X links van de Porsche, gericht naar de Monastic-achterdeur) + subtiel warm instaplicht!
+  const deurScharnier = new THREE.Group();
+  deurScharnier.position.set(0.84, 0.48, 0.62); // scharniert bij de A-stijl
+  const deurPaneel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.055, 0.54, 1.06),
+    new THREE.MeshBasicMaterial({ color: 0x05070a }),
+  );
+  deurPaneel.position.set(0.02, 0.04, -0.53);
+  const deurInkt = new THREE.Mesh(
+    new THREE.BoxGeometry(0.068, 0.556, 1.076),
+    new THREE.MeshBasicMaterial({ color: 0x020304, side: THREE.BackSide }),
+  );
+  deurInkt.position.copy(deurPaneel.position);
+  const deurGlans = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.98, 0.042),
+    new THREE.MeshBasicMaterial({ color: 0xebe6c8 }),
+  );
+  deurGlans.rotation.y = Math.PI / 2;
+  deurGlans.position.set(0.050, 0.25, -0.53);
+  const deurKlink = new THREE.Mesh(
+    new THREE.BoxGeometry(0.024, 0.032, 0.14),
+    new THREE.MeshBasicMaterial({ color: 0xc8cdd2 }),
+  );
+  deurKlink.position.set(0.052, 0.19, -0.92);
+  deurScharnier.add(deurPaneel, deurInkt, deurGlans, deurKlink);
+  deurScharnier.visible = false;
+  chassis.add(deurScharnier);
+
   // Subtiele Kuifje-uitlaatrook (18 herbruikbare getekende wolkjes uit de linker einddemper).
   const rookTex = rookBeeld();
   const rookGroep = new THREE.Group();
@@ -1262,7 +1297,7 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   scene.add(rookGroep);
   let rookIdx = 0, rookTimer = 0;
 
-  // Spoor van opvliegende herfstblaadjes achter de Porsche-spoiler tijdens het scheuren door de bocht!
+  // Spoor van opvliegende herfstblaadjes achter de Porsche-spoiler tijdens het rijden.
   const spoorGeo = new THREE.PlaneGeometry(0.23, 0.23);
   const spoorMat = new THREE.MeshBasicMaterial({ map: bladBeeld(), transparent: true, alphaTest: 0.2, side: THREE.DoubleSide });
   const AANTAL_SPOOR = 48;
@@ -1289,39 +1324,38 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   spoorMesh.instanceMatrix.needsUpdate = true;
   let spoorIdx = 0, spoorTimer = 0;
 
-  // Route van de Porsche 930: van Huizerweg vlot door de bocht bij de kruising langs Chapeau, recht naar
-  // de Albert Heijn en soepel vooruit ingeparkeerd in zaagtand-parkeervak #2 ((-25.45, -8.10), richting (+0.275, -0.961)).
+  // Route van de Porsche 930: Torenlaan (y=0) -> kruising -> Meentweg -> oprit (y=0.085 grindhoogte) voor de achterdeur!
   const route = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(12.5, 0, 15.2),
-    new THREE.Vector3(4.0, 0, 20.0),
-    new THREE.Vector3(-6.5, 0, 25.0),
-    new THREE.Vector3(-17.5, 0, 27.6),
-    new THREE.Vector3(-23.6, 0, 25.2),   // de krappe bocht op de kruising!
-    new THREE.Vector3(-25.6, 0, 19.5),
-    new THREE.Vector3(-25.8, 0, 12.0),   // langs het herstelde Bistrot Chapeau
-    new THREE.Vector3(-26.9, 0, 4.2),
-    new THREE.Vector3(-28.2, 0, -1.5),
-    new THREE.Vector3(-27.8, 0, -4.6),
-    new THREE.Vector3(-26.25, 0, -6.0),  // indraaien naar AH-parkeervak #2
-    new THREE.Vector3(-25.75, 0, -7.05),
-    new THREE.Vector3(-25.45, 0, -8.10), // geparkeerd pal voor de Albert Heijn!
+    new THREE.Vector3(-48.0, 0.0, 48.0),   // Torenlaan (richting Laren)
+    new THREE.Vector3(-35.0, 0.0, 37.5),   // Torenlaan naderend richting de kruising
+    new THREE.Vector3(-23.5, 0.0, 29.0),   // De kruising langs handwijzer & lantaarn
+    new THREE.Vector3(-13.5, 0.0, 25.0),   // Draait rechtsaf de Meentweg op
+    new THREE.Vector3(-2.5, 0.0, 19.5),    // Langs de verlichte hoekpand-etalage
+    new THREE.Vector3(9.5, 0.0, 12.2),     // Meentweg langs de straatlantaarn
+    new THREE.Vector3(20.0, 0.0, 5.2),     // Richting de oprit en de heg
+    new THREE.Vector3(25.8, 0.02, 0.2),    // Voorbij lantaarn (22.95, 1.05) en heg
+    new THREE.Vector3(25.6, 0.06, -2.2),   // Ruime bocht de Monastic-oprit in!
+    new THREE.Vector3(20.2, 0.085, -2.6),  // Het erf op tussen heg en garage
+    new THREE.Vector3(16.0, 0.085, -1.8),  // Richting de achterdeur van het kantoor
+    new THREE.Vector3(13.8, 0.085, -1.0),  // Tot stilstand op de oprit (exact op grindhoogte y=0.085!)
   ]);
 
   const tmpPos = new THREE.Vector3(), tmpVoor = new THREE.Vector3(), tmpAchter = new THREE.Vector3();
   const uitlaatWereld = new THREE.Vector3(), kontWereld = new THREE.Vector3();
   const d1 = new THREE.Vector3(), d2 = new THREE.Vector3();
   let huidigeU = 1.0, huidigeSnelheid = 0, laatsteSec = 0;
+  let motorLicht = 1.0, laatsteBrandt = 0;
 
-  // Niet-lineair snelheidsprofiel: vlot door de bocht, dan strak afremmen in het AH-parkeervak.
+  // Niet-lineair snelheidsprofiel: vlot vanaf de Torenlaan en Meentweg, dan rustig en trefzeker de oprit op.
   const voortgang = (t) => {
     const c = Math.max(0, Math.min(1, t));
     if (c < 0.72) {
       const k = c / 0.72;
-      return 0.82 * (0.18 * k * k + 0.82 * k);
+      return 0.76 * (0.12 * k * k + 0.88 * k);
     }
     const k = (c - 0.72) / 0.28;
-    const rem = 1 - Math.pow(1 - k, 3);
-    return 0.82 + 0.18 * rem;
+    const rem = 1 - Math.pow(1 - k, 2.8);
+    return 0.76 + 0.24 * rem;
   };
 
   const kopNeusWereld = new THREE.Vector3(), kopRichtWereld = new THREE.Vector3();
@@ -1329,8 +1363,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
     const uc = Math.max(0.001, Math.min(0.9999, u));
     route.getPointAt(uc, tmpPos);
     route.getPointAt(Math.min(0.9999, uc + 0.004), tmpVoor);
-    if (uc > 0.995) {
-      tmpVoor.set(tmpPos.x + 0.275, 0, tmpPos.z - 0.961);
+    if (uc > 0.992) {
+      const bl = Math.min(1, (uc - 0.992) / 0.008);
+      const tx = tmpVoor.x - tmpPos.x, tz = tmpVoor.z - tmpPos.z;
+      const tl = Math.hypot(tx, tz) || 1;
+      const fx = (tx / tl) * (1 - bl) + (-0.62) * bl;
+      const fz = (tz / tl) * (1 - bl) + (-0.78) * bl;
+      tmpVoor.set(tmpPos.x + fx, tmpPos.y, tmpPos.z + fz);
     }
     group.position.copy(tmpPos);
     group.lookAt(tmpVoor);
@@ -1493,13 +1532,30 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
       }
     },
     zetLicht(brandt, inktKleur) {
-      LICHT.uKopAan.value = brandt;
+      laatsteBrandt = brandt;
+      const eff = brandt * motorLicht;
+      LICHT.uKopAan.value = eff;
       for (const sp of kopGloedSprites) {
-        sp.visible = brandt > 0.04;
-        sp.material.opacity = brandt * 0.92;
+        sp.visible = eff > 0.04;
+        sp.material.opacity = eff * 0.92;
       }
-      achterMat.opacity = brandt * 0.92;
+      achterMat.opacity = eff * 0.92;
       schaduwMat.color.copy(inktKleur);
+    },
+    zetMotorLicht(factor) {
+      motorLicht = Math.max(0, Math.min(1, factor));
+      const eff = laatsteBrandt * motorLicht;
+      LICHT.uKopAan.value = eff;
+      for (const sp of kopGloedSprites) {
+        sp.visible = eff > 0.04;
+        sp.material.opacity = eff * 0.92;
+      }
+      achterMat.opacity = eff * 0.92;
+    },
+    zetDeur(openT) {
+      const o = Math.max(0, Math.min(1, openT));
+      deurScharnier.visible = o > 0.01;
+      deurScharnier.rotation.y = o * 0.96;
     },
     positie(uit) { return uit.copy(group.position); },
   };
@@ -1572,70 +1628,130 @@ function stopIntro(autoParkeren = false) {
   intro = null;
   const knop = document.getElementById('intro-knop');
   if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
-  if (autoParkeren && porsche) porsche.zetIntroStand(1.0, performance.now() * 0.001);
+  if (autoParkeren && porsche) {
+    porsche.zetIntroStand(1.0, performance.now() * 0.001);
+    porsche.zetDeur(0);
+    porsche.zetMotorLicht(1);
+  }
+  if (bezoeker) { bezoeker.zetZichtbaar(false); bezoeker.belHandGroep.visible = false; }
+  if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, 0);
   werkCartoucheBij();
 }
 
-// ---- Kuifje / Tintin intro-scène in twee strak getimede fases:
-// Fase 1 (0..0.34): snelle duikvlucht van hoog boven Blaricum omlaag tot op straatniveau (y=1,75 m).
-// Fase 2 (0.34..1.0): op straatniveau precies de bocht pakken met de Porsche 930 Turbo (rook + opvliegende blaadjes),
-// meebewegen langs het herstelde Bistrot Chapeau en strak inparkeren pal voor de Albert Heijn.
-const DUIK_OGEN = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-4, 42, 52),
-  new THREE.Vector3(-16, 17, 38),
-  new THREE.Vector3(-25.5, 4.2, 31.5),
-  new THREE.Vector3(-29.2, 1.70, 26.8),
-]);
-const DUIK_DOELEN = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-14, 3.0, 12),
-  new THREE.Vector3(-18, 2.2, 18),
-  new THREE.Vector3(-22, 1.3, 22),
-  new THREE.Vector3(-23.2, 1.0, 23.0),
-]);
-const STRAAT_OGEN = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-29.2, 1.70, 26.8), // laag op de open kruising
-  new THREE.Vector3(-29.6, 1.55, 20.5), // laag bij de bocht, 2,9 m ten zuiden van Chapeau (z=17,60)
-  new THREE.Vector3(-29.4, 1.85, 12.2), // open straat, 2,18 m ten oosten van Chapeau's oostgevel (x=-31,58)
-  new THREE.Vector3(-30.6, 2.55, 4.4),  // 6,3 m ten noorden van Chapeau (z=10,72), vrij zicht naar AH
-  new THREE.Vector3(-34.8, 3.85, 3.6),  // eindkader op de geparkeerde Porsche voor de AH
-]);
-const STRAAT_DOELEN = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-23.2, 1.0, 23.0),
-  new THREE.Vector3(-24.8, 0.95, 17.5),
-  new THREE.Vector3(-25.8, 1.0, 9.2),
-  new THREE.Vector3(-26.2, 1.2, -4.5),
-  new THREE.Vector3(-24.2, 1.55, -7.8),
-]);
-
+// ---- Kuifje / Ligne Claire Detective-Verhaal (5 strakke film-scènes, 22 seconden):
+//   1 (0.00–0.30) Torenlaan & kruising: de zwarte Porsche komt vanaf de Torenlaan het dorp in langs de handwijzer.
+//   2 (0.30–0.52) De oprit op: draait tussen heg en garage het Monastic-erf op, stopt en zet de koplampen uit.
+//   3 (0.52–0.70) Laag bij het portier: het portier zwaait open, gepoetste schoenen & trenchcoat-zoom stappen uit.
+//   4 (0.70–0.84) Naar de achterdeur: de mysterieuze bezoeker (trenchcoat, gleufhoed, aktetas) loopt naar het kantoor.
+//   5 (0.84–1.00) Aanbellen bij Monastic: close-up op de Monastic-intercom, vinger drukt aan, TRRRING! en ganglicht aan.
 const hoekVoorScherm = (h) => (camera.aspect < 1 ? Math.min(62, h + 15) : h);
+const smooth01 = (x) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+const LOOP_START = new THREE.Vector3(12.92, 0.085, -0.22);
+const LOOP_EIND = new THREE.Vector3(8.68, 0.085, -2.02);
+const LOOP_YAW = Math.atan2(LOOP_EIND.x - LOOP_START.x, LOOP_EIND.z - LOOP_START.z);
+const LOOP_LENGTE = LOOP_START.distanceTo(LOOP_EIND);
+const MUUR_RECHTS = new THREE.Vector3(-INTERCOM_NORMAAL.z, 0, INTERCOM_NORMAAL.x); // lokaal +X op de intercom-muur
+const tmpLoopPos = new THREE.Vector3();
+const tmpBelPos = new THREE.Vector3();
 
 function pasIntroFrameToe(tNorm, sec) {
   const c = Math.max(0, Math.min(1, tNorm));
-  const pT = Math.max(0, Math.min(1, (c - 0.16) / 0.78));
-  if (porsche) porsche.zetIntroStand(pT, sec);
 
-  if (c < 0.34) {
-    const k = c / 0.34;
-    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    DUIK_OGEN.getPointAt(e, camera.position);
-    DUIK_DOELEN.getPointAt(e, stuur.target);
-    camera.fov = hoekVoorScherm(38 + 3 * e);
-  } else {
-    const k = (c - 0.34) / 0.66;
-    STRAAT_OGEN.getPointAt(k, camera.position);
-    STRAAT_DOELEN.getPointAt(k, stuur.target);
-    if (porsche && k < 0.88) {
-      const volg = Math.sin((k / 0.88) * Math.PI);
-      const pPos = porsche.positie(new THREE.Vector3());
-      pPos.y += 0.85;
-      stuur.target.lerp(pPos, volg * 0.78);
-    }
-    camera.fov = hoekVoorScherm(41 - 3 * k);
+  // 1. Porsche rijdt over t = 0.00..0.50 van de Torenlaan tot stilstand op de Monastic-oprit.
+  const pT = Math.min(1, c / 0.50);
+  if (porsche) {
+    porsche.zetIntroStand(pT, sec);
+    const lichtAan = c < 0.49 ? 1.0 : Math.max(0, 1 - (c - 0.49) / 0.03);
+    porsche.zetMotorLicht(lichtAan);
+    let deurOpen = 0;
+    if (c >= 0.52 && c < 0.56) deurOpen = smooth01((c - 0.52) / 0.04);
+    else if (c >= 0.56 && c < 0.625) deurOpen = 1.0;
+    else if (c >= 0.625 && c < 0.665) deurOpen = 1.0 - smooth01((c - 0.625) / 0.04);
+    porsche.zetDeur(deurOpen);
   }
+
+  // 2. Bezoeker + Intercom-status
+  let belDruk = 0, belRingT = 0, raamAan = 0;
+  if (bezoeker && intercom) {
+    const belWereld = intercom.belWereldPositie(tmpBelPos);
+    if (c < 0.545) {
+      bezoeker.zetZichtbaar(false);
+      bezoeker.belHandGroep.visible = false;
+    } else if (c < 0.635) {
+      const uitT = smooth01((c - 0.545) / 0.09);
+      bezoeker.zetZichtbaar(true);
+      bezoeker.zetStand(LOOP_START, LOOP_YAW, 0, uitT, 0, belWereld);
+    } else if (c < 0.84) {
+      const loopT = smooth01((c - 0.635) / 0.205);
+      tmpLoopPos.lerpVectors(LOOP_START, LOOP_EIND, loopT);
+      const stapFase = (loopT * LOOP_LENGTE / 0.46) * Math.PI;
+      bezoeker.zetZichtbaar(true);
+      bezoeker.zetStand(tmpLoopPos, LOOP_YAW, stapFase, 1, 0, belWereld);
+    } else {
+      bezoeker.zetZichtbaar(false);
+      let reik = 0;
+      if (c >= 0.855 && c < 0.905) reik = smooth01((c - 0.855) / 0.05);
+      else if (c >= 0.905 && c < 0.938) reik = 1.0;
+      else if (c >= 0.938 && c < 0.985) reik = 1.0 - smooth01((c - 0.938) / 0.047);
+      belDruk = (c >= 0.905 && c < 0.938) ? smooth01(Math.sin(((c - 0.905) / 0.033) * Math.PI)) : 0;
+      belRingT = c >= 0.91 ? Math.min(1, (c - 0.91) / 0.045) : 0;
+      raamAan = c >= 0.935 ? smooth01((c - 0.935) / 0.035) : 0;
+      bezoeker.zetStand(LOOP_EIND, LOOP_YAW, 0, 1, reik, belWereld);
+    }
+    intercom.zetStaat(LICHT.uBrandt.value, belDruk, belRingT, raamAan);
+  }
+
+  // 3. Camera-regie in 5 filmische Kuifje-scènes
+  if (c < 0.30) {
+    // Scène 1: Aankomst vanaf de Torenlaan langs de handwijzer & verlichte hoekpand-etalage
+    const k = smooth01(c / 0.30);
+    camera.position.set(-15.2 + 3.4 * k, 4.3 - 0.7 * k, 46.8 - 10.6 * k);
+    stuur.target.set(-18.5 + 14.5 * k, 2.4 + 0.6 * k, 26.5 - 10.5 * k);
+    if (porsche) {
+      const pPos = porsche.positie(new THREE.Vector3());
+      pPos.y += 1.0;
+      stuur.target.lerp(pPos, 0.35 + 0.35 * Math.sin(k * Math.PI));
+    }
+    camera.fov = hoekVoorScherm(36);
+  } else if (c < 0.52) {
+    // Scène 2: Vrij zicht pal binnen de inrit (geen lantaarnpaal of heg ervoor!) — Porsche draait de oprit op
+    const k = smooth01((c - 0.30) / 0.22);
+    camera.position.set(22.2 - 4.2 * k, 2.55 - 0.45 * k, 0.2 + 1.3 * k);
+    stuur.target.set(17.2 - 3.8 * k, 1.35 - 0.30 * k, -1.6 + 0.4 * k);
+    camera.fov = hoekVoorScherm(40 - 3 * k);
+  } else if (c < 0.70) {
+    // Scène 3: Laag kikvorsperspectief bij het open portier (schoenen, enkels, jaszoom & zwarte Porsche!)
+    const k = smooth01((c - 0.52) / 0.18);
+    camera.position.set(10.5 - 0.7 * k, 0.36 + 0.04 * k, 0.85 - 0.25 * k);
+    stuur.target.set(13.05 - 1.15 * k, 0.45 + 0.03 * k, -0.30 - 0.42 * k);
+    camera.fov = hoekVoorScherm(34);
+  } else if (c < 0.84) {
+    // Scène 4: Medium tracking-shot over het erf — de mysterieuze figuur in trenchcoat & hoed loopt naar de deur
+    const k = smooth01((c - 0.70) / 0.14);
+    camera.position.set(13.2 - 2.4 * k, 1.46 + 0.08 * k, 1.75 - 1.55 * k);
+    stuur.target.set(11.3 - 2.8 * k, 1.18 + 0.18 * k, -0.95 - 1.05 * k);
+    camera.fov = hoekVoorScherm(38 - 3 * k);
+  } else {
+    // Scène 5: Iconische close-up op de echte antraciete Monastic-intercom, zijaanzicht-hand & het gangraampje links
+    const k = smooth01((c - 0.84) / 0.16);
+    const afstand = 1.04 - 0.14 * k;
+    camera.position.copy(INTERCOM_POS)
+      .addScaledVector(INTERCOM_NORMAAL, afstand)
+      .addScaledVector(MUUR_RECHTS, -0.04 + 0.06 * k)
+      .add(new THREE.Vector3(0, -0.008, 0));
+    stuur.target.copy(INTERCOM_POS)
+      .addScaledVector(MUUR_RECHTS, -0.06 + 0.04 * k)
+      .add(new THREE.Vector3(0, -0.005, 0));
+    camera.fov = hoekVoorScherm(33 - 2 * k);
+  }
+
   camera.updateProjectionMatrix();
-  const kop = c < 0.32 ? ['Blaricum vanuit de lucht', 'Duikvlucht naar het dorpscentrum'] :
-              c < 0.72 ? ['De kruising · Porsche 930', 'Door de bocht langs Bistrot Chapeau'] :
-                         ['Albert Heijn · Inparkeren', 'De klassieker parkeert voor de deur'];
+  const kop = c < 0.30 ? ['De Torenlaan · Laat op de avond', 'Een zwarte Porsche 930 draait Blaricum in'] :
+              c < 0.52 ? ['Het erf · Monastic', 'De Porsche rijdt de oprit op en zet het licht uit'] :
+              c < 0.70 ? ['De bezoeker', 'Het portier opent — een mysterieuze gast stapt uit'] :
+              c < 0.84 ? ['Het kantoor · Achterdeur', 'Trenchcoat, hoed en aktetas — recht op Monastic af'] :
+              c < 0.91 ? ['Monastic · Blaricum', 'De hand reikt naar de intercom'] :
+                         ['Monastic · Blaricum', 'Trrring… binnen springt het licht aan'];
   werkCartoucheBij(kop[0], kop[1]);
 }
 
@@ -1643,8 +1759,12 @@ function startIntro() {
   if (intro) { stopIntro(false); return; }
   stopRondleiding();
   reis = null;
-  if (porsche) porsche.resetDeeltjes();
-  intro = { t0: performance.now(), duur: 11800 };
+  if (porsche) {
+    porsche.resetDeeltjes();
+    porsche.zetDeur(0);
+    porsche.zetMotorLicht(1);
+  }
+  intro = { t0: performance.now(), duur: 22000 };
   const knop = document.getElementById('intro-knop');
   if (knop) { knop.setAttribute('aria-pressed', 'true'); knop.textContent = 'Stop intro'; }
   for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', 'false');
@@ -1806,6 +1926,12 @@ async function begin() {
   porsche = bouwPorscheLeven(gesplitst.porsche, rompMat, rand, lMat, gloed);
   scene.add(porsche.group);
 
+  // De echte Monastic-intercom naast de achterdeur en de mysterieuze Kuifje-bezoeker voor de verhaalintro!
+  intercom = bouwIntercom(gloed);
+  scene.add(intercom.group);
+  bezoeker = bouwBezoeker(LICHT.uZon, LICHT.uNacht);
+  scene.add(bezoeker.root, bezoeker.belHandGroep);
+
   // Wolken uit Claude's g-klare-lijn: 11 vaste platen hoog rondom het dorp (overdag stapelwolken, 's nachts flarden).
   const plekken = [[-520, 190, -640, 300], [260, 250, -820, 380], [760, 170, -300, 260], [-820, 230, 180, 340], [520, 210, 640, 300], [-240, 260, 860, 360],
     [-60, 360, -900, 460], [560, 130, -720, 300], [980, 330, -640, 420], [-900, 150, -420, 320], [100, 150, 900, 300]];
@@ -1911,7 +2037,9 @@ async function begin() {
   window.toon = (stand, stijl, licht) => {
     naar(stand, true);
     kleur(stijl, licht, true);
-    if (porsche) porsche.zetIntroStand(1.0, 0);
+    if (porsche) { porsche.zetIntroStand(1.0, 0); porsche.zetDeur(0); porsche.zetMotorLicht(1); }
+    if (bezoeker) { bezoeker.zetZichtbaar(false); bezoeker.belHandGroep.visible = false; }
+    if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, 0);
     if (vogels) vogels.update(0);
     if (SLAG) slagKaart();
     stuur.update();
@@ -1958,9 +2086,12 @@ async function begin() {
       const t = Math.min(1, (nu - intro.t0) / intro.duur);
       pasIntroFrameToe(t, sec);
       if (t >= 1) {
-        standNaam = 'plein';
-        stopIntro(false);
-        for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', String(k.dataset.stand === 'plein'));
+        intro = null;
+        standNaam = 'erf';
+        const knop = document.getElementById('intro-knop');
+        if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
+        for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', String(k.dataset.stand === 'erf'));
+        werkCartoucheBij('Monastic · Blaricum', 'Trrring… sleep om vrij rond te kijken');
       }
     } else {
       if (porsche && !isAfdruk) porsche.updateRust(sec);
