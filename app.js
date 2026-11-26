@@ -70,11 +70,11 @@ const laad = async (naam, Soort) => {
   return new Soort(await r.arrayBuffer());
 };
 
-// Wat alle tekenprogramma's delen: de zon, de schaduwkaart, de nevel en de herfst-/schemer-sfeer.
+// Wat alle tekenprogramma's delen: de zon, de schaduwkaart, de nevel en de schemer-sfeer.
 const LICHT = {
   uZon: { value: new THREE.Vector3(0, 1, 0) }, uLichtMat: { value: new THREE.Matrix4() }, uSlagKaart: { value: null },
   uSlag: { value: SLAG ? 1 : 0 }, uNevel: { value: new THREE.Color() }, uNevelMaat: { value: new THREE.Vector3(150, 560, 0.5) },
-  uBrandt: { value: 0 }, uPlassen: { value: 0 }, uNat: { value: 0 }, uRegen: { value: 0 }, uTijd: { value: 0 },
+  uBrandt: { value: 0 }, uPlassen: { value: 0 }, uRegen: { value: 0 }, uTijd: { value: 0 },
   uPlasKleur: { value: new THREE.Color(0.92, 0.58, 0.27) }, uInktKleur: { value: new THREE.Color(0.06, 0.04, 0.03) },
 };
 
@@ -106,7 +106,6 @@ const SLAGCODE = `
   uniform vec3 uNevelMaat;
   uniform float uBrandt;
   uniform float uPlassen;
-  uniform float uNat;
   uniform vec3 uPlasKleur;
   uniform vec3 uInktKleur;
   bool klSlag(vec3 p, vec3 n, float weg) {
@@ -244,22 +243,6 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         k = mix(k, uInktKleur, randPlas * 0.86);
       }
 
-      // 4. Kuifje Herfstregen: glanzend natte stoep & klinkers met heldere witte luchtspiegeling en warme herfstglans.
-      if (uNat > 0.15 && (s == ${id.straat} || s == ${id.stoep} || s == ${id.parkeervak}) && abs(n.y) > 0.85) {
-        float wf = klRuis(vec3(vP.x * 0.22 + 1.7, 0.9, vP.z * 0.36 - 2.1))
-                 + 0.45 * klRuis(vec3(vP.x * 0.55 + 5.3, 1.9, vP.z * 0.72));
-        float fwW = max(fwidth(wf), 0.012);
-        float natVlak = smoothstep(0.30 - fwW, 0.30 + fwW, wf);
-        float glansStreep = smoothstep(0.56 - fwW, 0.56 + fwW, wf) * smoothstep(0.15, 0.35, sin(vP.z * 6.5 + vP.x * 2.2));
-        float randNat = smoothstep(0.265 - fwW, 0.265 + fwW, wf) * (1.0 - natVlak);
-        // Koele luchtspiegeling op het natte wegdek, afgewisseld met een subtiele warme herfstweerschijn.
-        float herfstTint = smoothstep(0.1, 0.6, klRuis(vec3(vP.x * 0.16, 4.1, vP.z * 0.16)));
-        vec3 spiegelKleur = mix(vec3(0.84, 0.90, 0.95), vec3(0.94, 0.84, 0.64), herfstTint * 0.42);
-        k = mix(k, spiegelKleur, natVlak * 0.52 * uNat);
-        k = mix(k, vec3(0.98, 0.99, 1.0), glansStreep * 0.62 * uNat);
-        k = mix(k, uInktKleur, randNat * 0.34 * uNat);
-      }
-
       gl_FragColor = vec4(klNevel(k, length(cameraPosition - vP)), 1.0);
     }`,
   // Beide kanten: een gespiegeld onderdeel in het model heeft zijn vlakken andersom. De vlakken liggen een
@@ -267,8 +250,8 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
   side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2,
 });
 
-// ---- Ronde vormen (kruinen, keien, de auto, mensen): dezelfde twee tonen, plus strakke Hergé lakglans
-// op de Porsche (diepzwarte spiegelrib + heldere witte glansband zoals in de Kuifje-achtervolging).
+// ---- Ronde vormen (kruinen, keien, de auto, mensen): dezelfde twee tonen, plus strakke klare-lijn lakglans
+// op de Porsche en schuine voorruitglans, zodat auto en bomen echt getekend aanvoelen.
 const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: palet }, ...LICHT },
   vertexShader: `
@@ -297,18 +280,14 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
       bool licht = vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32);
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
-      // Strakke Hergé / Kuifje hoogglans op de Porsche: heldere witte spiegellijn + diepzwarte strip-schaduwband.
+      // Strakke klare-lijn glansband op de gelakte Porsche en auto's (zoals Chaland / Van Dongen).
       if (s == ${id.porsche} || s == ${id.autolak}) {
         vec3 kijk = normalize(cameraPosition - vP);
         vec3 halfV = normalize(normalize(uZon + vec3(0.0, 0.45, 0.0)) + kijk);
-        float sp = pow(max(dot(n, halfV), 0.0), 14.0);
+        float sp = pow(max(dot(n, halfV), 0.0), 16.0);
         float fw = max(fwidth(sp), 0.02);
-        float glans = smoothstep(0.56 - fw, 0.56 + fw, sp);
-        // Grafische zwarte spiegelband langs de zijkant van de motorkap & spatborden (zoals de Mercedes in Kuifje).
-        float knik = abs(dot(n, kijk));
-        float zwartRib = (1.0 - smoothstep(0.24, 0.30, knik)) * smoothstep(0.12, 0.18, abs(n.y));
-        k = mix(k, uInktKleur, zwartRib * 0.78);
-        k = mix(k, vec3(0.99, 0.97, 0.94), glans * 0.85);
+        float glans = smoothstep(0.60 - fw, 0.60 + fw, sp);
+        k = mix(k, vec3(0.98, 0.95, 0.89), glans * 0.72);
       } else if (s == ${id.autoraam}) {
         float diag = (vP.x + vP.z) * 1.4 + vP.y * 2.2;
         float g = fract(diag * 0.65);
@@ -474,7 +453,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
   uniforms: {
     uLaag: { value: new THREE.Color() }, uMidden: { value: new THREE.Color() }, uHoog: { value: new THREE.Color() },
     uBand: { value: new THREE.Vector2(0.03, 0.1) }, uWolk: { value: 0 },
-    uRegen: LICHT.uRegen, uNat: LICHT.uNat, uTijd: LICHT.uTijd,
+    uRegen: LICHT.uRegen, uTijd: LICHT.uTijd,
   },
   vertexShader: `
     varying vec3 vR;
@@ -486,7 +465,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
   fragmentShader: `
     uniform vec3 uLaag, uMidden, uHoog;
     uniform vec2 uBand;
-    uniform float uWolk, uRegen, uNat, uTijd;
+    uniform float uWolk, uRegen, uTijd;
     varying vec3 vR;
     ${RUIS}
     void main() {
@@ -512,21 +491,17 @@ const luchtShader = () => new THREE.ShaderMaterial({
         k = mix(k, mix(uHoog, uMidden, 0.20), strook * 0.50);
       }
 
-      // Strakke schuine Kuifje-regenlijnen (donker potlood/inkt in herfstlucht, licht in schemerlucht).
-      if (uRegen > 0.25 && h > 0.01) {
+      // Fijne schuine Van Dongen-regenstreepjes in de schemerlucht.
+      if (uRegen > 0.5 && h > 0.01) {
         vec2 sc = gl_FragCoord.xy;
-        float helling = mix(0.24, 0.46, uNat);
-        vec2 schuin = vec2(sc.x + sc.y * helling, sc.y - sc.x * helling + uTijd * 290.0);
-        float stap = mix(26.0, 22.0, uNat);
-        float kolom = floor(schuin.x / stap);
-        float celX = fract(schuin.x / stap);
+        vec2 schuin = vec2(sc.x + sc.y * 0.24, sc.y - sc.x * 0.24 + uTijd * 220.0);
+        float kolom = floor(schuin.x / 26.0);
+        float celX = fract(schuin.x / 26.0);
         float h1 = klHash(vec3(kolom, 3.1, 7.7));
         float yLijn = fract((schuin.y + h1 * 180.0) / 145.0);
-        float isStreep = step(mix(0.45, 0.34, uNat), h1)
-                       * (abs(celX - 0.5) < 0.028 ? 1.0 : 0.0)
-                       * smoothstep(0.08, 0.12, yLijn) * (1.0 - smoothstep(0.44, 0.48, yLijn));
-        vec3 rKleur = mix(vec3(0.84, 0.87, 0.82), vec3(0.24, 0.28, 0.32), uNat);
-        k = mix(k, rKleur, isStreep * mix(0.22, 0.36, uNat) * uRegen);
+        float isStreep = step(0.45, h1) * smoothstep(0.0, 0.04, abs(celX - 0.5) < 0.028 ? 1.0 : 0.0)
+                       * smoothstep(0.10, 0.14, yLijn) * (1.0 - smoothstep(0.38, 0.42, yLijn));
+        k = mix(k, vec3(0.84, 0.87, 0.82), isStreep * 0.22);
       }
 
       gl_FragColor = vec4(k, 1.0);
@@ -535,7 +510,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
 });
 
 let palet, vakNamen, lijn, rand, lucht, wolken = [], wolkBasis = [], lampen = [], bladeren = null, bladData = [], slagMat, lijnMaat = 1;
-let stijlNaam = 'kuifje', lichtNaam = 'herfst';
+let stijlNaam = 'gedempt', lichtNaam = 'middag';
 const slagDoel = new THREE.WebGLRenderTarget(SLAGMAAT, SLAGMAAT, { depthTexture: new THREE.DepthTexture(SLAGMAAT, SLAGMAAT, THREE.UnsignedIntType) });
 slagDoel.depthTexture.minFilter = slagDoel.depthTexture.magFilter = THREE.NearestFilter;
 const slagCam = new THREE.OrthographicCamera(-100, 100, 100, -100, 100, 900);
@@ -612,7 +587,6 @@ function kleurDoelStaat(st, sm) {
     nevelMaat: new THREE.Vector3(sm.nevel.van, sm.nevel.tot, sm.nevel.max),
     brandt: sm.brandt ? 1 : 0,
     plassen: sm.plassen || 0,
-    nat: sm.nat || 0,
     regen: sm.regen || 0,
     plasKleur: c(midden),
     inkt: c(st.inkt),
@@ -638,7 +612,6 @@ function pasKleurToe(a, b, t) {
   LICHT.uNevelMaat.value.lerpVectors(a.nevelMaat, b.nevelMaat, e);
   LICHT.uBrandt.value = a.brandt + (b.brandt - a.brandt) * e;
   LICHT.uPlassen.value = a.plassen + (b.plassen - a.plassen) * e;
-  LICHT.uNat.value = a.nat + (b.nat - a.nat) * e;
   LICHT.uRegen.value = a.regen + (b.regen - a.regen) * e;
   LICHT.uPlasKleur.value.lerpColors(a.plasKleur, b.plasKleur, e);
   LICHT.uInktKleur.value.lerpColors(a.inkt, b.inkt, e);
@@ -674,6 +647,7 @@ function kleur(naam, licht, meteen = false) {
     huidigeKleurStaat = doel;
     kleurReis = null;
   } else {
+    // Momentopname van huidige toestand zodat snelle wissels nooit verspringen.
     const van = {
       palet: new Float32Array(palet),
       hoog: lucht.uniforms.uHoog.value.clone(),
@@ -685,7 +659,6 @@ function kleur(naam, licht, meteen = false) {
       nevelMaat: LICHT.uNevelMaat.value.clone(),
       brandt: LICHT.uBrandt.value,
       plassen: LICHT.uPlassen.value,
-      nat: LICHT.uNat.value,
       regen: LICHT.uRegen.value,
       plasKleur: LICHT.uPlasKleur.value.clone(),
       inkt: LICHT.uInktKleur.value.clone(),
@@ -772,46 +745,22 @@ function gloedBeeld() {
   return t;
 }
 
-// Een handgetekend Kuifje-herfstblad (witte vulling + zwarte inktomlijning en nerven; kleur komt per blaadje via setColorAt).
+// Een handgetekend dwarrelend blaadje met dun inktlijntje voor subtiel leven op de kruising.
 function bladBeeld() {
   const c = document.createElement('canvas');
-  c.width = c.height = 96;
+  c.width = c.height = 64;
   const g = c.getContext('2d');
-  g.translate(48, 52);
-  g.rotate(-0.22);
-  g.fillStyle = '#ffffff';
-  g.strokeStyle = '#100e0c';
+  g.translate(32, 32);
+  g.rotate(-0.35);
+  g.fillStyle = '#c4833b';
+  g.strokeStyle = '#14110f';
   g.lineWidth = 4.5;
-  g.lineJoin = 'round';
-  g.lineCap = 'round';
   g.beginPath();
-  g.moveTo(0, 28);
-  g.lineTo(0, 16);
-  g.lineTo(-24, 18);
-  g.lineTo(-15, 5);
-  g.lineTo(-32, -5);
-  g.lineTo(-14, -10);
-  g.lineTo(-18, -26);
-  g.lineTo(-5, -18);
-  g.lineTo(0, -36);
-  g.lineTo(5, -18);
-  g.lineTo(18, -26);
-  g.lineTo(14, -10);
-  g.lineTo(32, -5);
-  g.lineTo(15, 5);
-  g.lineTo(24, 18);
-  g.lineTo(0, 16);
+  g.moveTo(-22, 0);
+  g.quadraticCurveTo(0, -16, 22, 0);
+  g.quadraticCurveTo(0, 16, -22, 0);
   g.closePath();
   g.fill();
-  g.stroke();
-  // Hoofdnerf en twee zijnerven in Oost-Indische inkt.
-  g.lineWidth = 3.0;
-  g.beginPath();
-  g.moveTo(0, 30); g.lineTo(0, -24);
-  g.moveTo(0, 6); g.lineTo(-16, -2);
-  g.moveTo(0, 6); g.lineTo(16, -2);
-  g.moveTo(0, -7); g.lineTo(-11, -15);
-  g.moveTo(0, -7); g.lineTo(11, -15);
   g.stroke();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -1178,14 +1127,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
   let rookIdx = 0, rookTimer = 0;
 
   // Spoor van opvliegende herfstblaadjes achter de Porsche-spoiler tijdens het scheuren door de bocht!
-  const spoorGeo = new THREE.PlaneGeometry(0.28, 0.28);
+  const spoorGeo = new THREE.PlaneGeometry(0.23, 0.23);
   const spoorMat = new THREE.MeshBasicMaterial({ map: bladBeeld(), transparent: true, alphaTest: 0.2, side: THREE.DoubleSide });
   const AANTAL_SPOOR = 48;
   const spoorMesh = new THREE.InstancedMesh(spoorGeo, spoorMat, AANTAL_SPOOR);
   spoorMesh.frustumCulled = false;
   spoorMesh.renderOrder = 11;
   scene.add(spoorMesh);
-  const herfstTinten = [new THREE.Color('#f4c236'), new THREE.Color('#e86b24'), new THREE.Color('#cc3824')];
   const spoorPool = [];
   let sZaad = 1337;
   const sKans = () => (sZaad = (sZaad * 16807) % 2147483647) / 2147483647;
@@ -1196,15 +1144,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
       x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0,
       rx: sKans() * 6, ry: sKans() * 6, rz: sKans() * 6,
       wrx: (sKans() - 0.5) * 8, wry: (sKans() - 0.5) * 7, wrz: (sKans() - 0.5) * 9,
-      schaal: 0.90 + sKans() * 0.65,
+      schaal: 0.85 + sKans() * 0.6,
     });
     spoorDummy.position.set(0, -50, 0);
     spoorDummy.updateMatrix();
     spoorMesh.setMatrixAt(i, spoorDummy.matrix);
-    spoorMesh.setColorAt(i, herfstTinten[i % herfstTinten.length]);
   }
   spoorMesh.instanceMatrix.needsUpdate = true;
-  if (spoorMesh.instanceColor) spoorMesh.instanceColor.needsUpdate = true;
   let spoorIdx = 0, spoorTimer = 0;
 
   // Route van de Porsche 930: van Huizerweg vlot door de bocht bij de kruising langs Chapeau, recht naar
@@ -1224,65 +1170,6 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
     new THREE.Vector3(-25.75, 0, -7.05),
     new THREE.Vector3(-25.45, 0, -8.10), // geparkeerd pal voor de Albert Heijn!
   ]);
-
-  // Gekromde zwarte inkt-snelheidslijnen (Hergé-bochtvegen / bandensporen achter de achterwielen door de bocht).
-  const bouwVeegLijn = (uVan, uTot, dwars, halveBreedte, stappen) => {
-    const pos = new Float32Array(stappen * 6 * 3);
-    const pA = new THREE.Vector3(), pB = new THREE.Vector3(), tan = new THREE.Vector3();
-    let ptr = 0;
-    for (let i = 0; i < stappen; i++) {
-      const f0 = i / stappen, f1 = (i + 1) / stappen;
-      const u0 = uVan + (uTot - uVan) * f0, u1 = uVan + (uTot - uVan) * f1;
-      route.getPointAt(u0, pA); route.getTangentAt(u0, tan);
-      const r0x = -tan.z, r0z = tan.x;
-      const w0 = halveBreedte * Math.sin(Math.min(1, f0 * 4.5) * Math.PI * 0.5) * Math.sin(Math.min(1, (1 - f0) * 4.5) * Math.PI * 0.5);
-      route.getPointAt(u1, pB); route.getTangentAt(u1, tan);
-      const r1x = -tan.z, r1z = tan.x;
-      const w1 = halveBreedte * Math.sin(Math.min(1, f1 * 4.5) * Math.PI * 0.5) * Math.sin(Math.min(1, (1 - f1) * 4.5) * Math.PI * 0.5);
-      const ax0 = pA.x + r0x * (dwars - w0), az0 = pA.z + r0z * (dwars - w0);
-      const ax1 = pA.x + r0x * (dwars + w0), az1 = pA.z + r0z * (dwars + w0);
-      const bx0 = pB.x + r1x * (dwars - w1), bz0 = pB.z + r1z * (dwars - w1);
-      const bx1 = pB.x + r1x * (dwars + w1), bz1 = pB.z + r1z * (dwars + w1);
-      const y = 0.052;
-      pos.set([ax0, y, az0, ax1, y, az1, bx1, y, bz1, ax0, y, az0, bx1, y, bz1, bx0, y, bz0], ptr);
-      ptr += 18;
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setDrawRange(0, 0);
-    return { geo, uVan, uTot, stappen };
-  };
-  const veegMat = new THREE.MeshBasicMaterial({
-    color: 0x100e0c, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -4,
-  });
-  const vegen = [
-    bouwVeegLijn(0.16, 0.68, -0.74, 0.044, 68),
-    bouwVeegLijn(0.18, 0.70,  0.74, 0.044, 68),
-    bouwVeegLijn(0.24, 0.56,  1.12, 0.028, 44), // buitenbocht-accentstreep zoals op de Kuifje-achtervolgingsplaat
-  ];
-  const veegGroep = new THREE.Group();
-  for (const v of vegen) {
-    const m = new THREE.Mesh(v.geo, veegMat);
-    m.frustumCulled = false;
-    m.renderOrder = 4;
-    veegGroep.add(m);
-  }
-  scene.add(veegGroep);
-
-  const werkVegenBij = (u, tNorm) => {
-    const achterU = Math.max(0, u - 0.035);
-    const vervaag = tNorm > 0.76 ? Math.max(0, 1 - (tNorm - 0.76) / 0.16) : 1.0;
-    veegMat.opacity = 0.84 * vervaag;
-    veegGroep.visible = vervaag > 0.02 && achterU > 0.16;
-    for (const v of vegen) {
-      const aandeel = THREE.MathUtils.clamp((achterU - v.uVan) / (v.uTot - v.uVan), 0, 1);
-      const startAandeel = THREE.MathUtils.clamp((achterU - 0.36 - v.uVan) / (v.uTot - v.uVan), 0, aandeel);
-      const startV = Math.floor(startAandeel * v.stappen) * 6;
-      const eindV = Math.floor(aandeel * v.stappen) * 6;
-      v.geo.setDrawRange(startV, Math.max(0, eindV - startV));
-    }
-  };
 
   const tmpPos = new THREE.Vector3(), tmpVoor = new THREE.Vector3(), tmpAchter = new THREE.Vector3();
   const uitlaatWereld = new THREE.Vector3(), kontWereld = new THREE.Vector3();
@@ -1392,7 +1279,6 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
   };
 
   zetOp(1.0, 0, 0, 0);
-  werkVegenBij(1.0, 1.0);
 
   return {
     group, route,
@@ -1405,7 +1291,6 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
         spoorMesh.setMatrixAt(i, spoorDummy.matrix);
       }
       spoorMesh.instanceMatrix.needsUpdate = true;
-      werkVegenBij(0, 0);
       rookTimer = 0; spoorTimer = 0;
     },
     zetIntroStand(tNorm, sec) {
@@ -1421,18 +1306,11 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
       const bocht = (d1.x * d2.z - d1.z * d2.x) * Math.min(1.5, snelheid);
       const remmen = tNorm > 0.72 && tNorm < 0.99 ? Math.sin(((tNorm - 0.72) / 0.27) * Math.PI) : 0;
       zetOp(u, snelheid, bocht, remmen);
-      werkVegenBij(u, tNorm);
 
       const dt = Math.min(0.08, Math.max(0.001, sec - laatsteSec));
       laatsteSec = sec;
       if (isAfdruk && tNorm > 0.15 && tNorm < 0.92) {
-        for (const r of rookPool) { r.leeftijd = 99; r.sp.visible = false; }
-        for (let i = 0; i < AANTAL_SPOOR; i++) {
-          spoorPool[i].actief = false;
-          spoorDummy.position.set(0, -50, 0);
-          spoorDummy.updateMatrix();
-          spoorMesh.setMatrixAt(i, spoorDummy.matrix);
-        }
+        this.resetDeeltjes();
         for (let k = 0; k < 6; k++) {
           const pk = Math.max(0.02, u - 0.015 * (k + 1));
           route.getPointAt(pk, tmpPos);
@@ -1442,12 +1320,12 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
           r.mat.opacity = 0.65 * (1 - k / 7);
           r.sp.visible = true;
         }
-        for (let k = 0; k < 34; k++) {
-          const pk = Math.max(0.01, u - 0.0065 * (k + 1));
+        for (let k = 0; k < 28; k++) {
+          const pk = Math.max(0.01, u - 0.007 * (k + 1));
           route.getPointAt(pk, tmpPos);
-          spoorDummy.position.set(tmpPos.x + Math.sin(k * 2.3) * 1.4, 0.32 + (k % 5) * 0.35, tmpPos.z + Math.cos(k * 1.9) * 1.4);
+          spoorDummy.position.set(tmpPos.x + Math.sin(k * 2.3) * 1.3, 0.35 + (k % 5) * 0.34, tmpPos.z + Math.cos(k * 1.9) * 1.3);
           spoorDummy.rotation.set(k * 0.8, k * 1.1, k * 0.5);
-          spoorDummy.scale.setScalar(1.15);
+          spoorDummy.scale.setScalar(1.1);
           spoorDummy.updateMatrix();
           spoorMesh.setMatrixAt(k, spoorDummy.matrix);
         }
@@ -1472,14 +1350,12 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
     },
     zetLicht(brandt, inktKleur, lichtNaamNu) {
       const isAvond = lichtNaamNu === 'avond';
-      const isHerfst = lichtNaamNu === 'herfst';
-      const sterkte = Math.max(brandt, isAvond ? 0.48 : isHerfst ? 0.38 : 0.0);
-      kegelMat.opacity = sterkte * 0.46;
+      const sterkte = Math.max(brandt, isAvond ? 0.45 : 0.0);
+      kegelMat.opacity = sterkte * 0.44;
       kegel.visible = sterkte > 0.04;
-      kopMat.opacity = Math.max(brandt * 0.95, isAvond ? 0.68 : isHerfst ? 0.78 : 0.0);
-      achterMat.opacity = Math.max(brandt * 0.88, isAvond ? 0.50 : isHerfst ? 0.62 : 0.0);
+      kopMat.opacity = Math.max(brandt * 0.95, isAvond ? 0.65 : 0.0);
+      achterMat.opacity = Math.max(brandt * 0.88, isAvond ? 0.48 : 0.0);
       schaduwMat.color.copy(inktKleur);
-      veegMat.color.copy(inktKleur);
     },
     positie(uit) { return uit.copy(group.position); },
   };
@@ -1557,9 +1433,9 @@ function stopIntro(autoParkeren = false) {
 }
 
 // ---- Kuifje / Tintin intro-scène in twee strak getimede fases:
-// Fase 1 (0..0.34): snelle duikvlucht van hoog boven Blaricum omlaag tot op straatniveau (y=1,70 m).
-// Fase 2 (0.34..1.0): laag 3/4-achtervolgingsshot op de open straat (altijd ruim oostelijk van Bistrot Chapeau
-// x=-31,58 zodat geen gevel ooit het zicht blokkeert), mee door de bocht en strak inparkeren voor de Albert Heijn.
+// Fase 1 (0..0.34): snelle duikvlucht van hoog boven Blaricum omlaag tot op straatniveau (y=1,75 m).
+// Fase 2 (0.34..1.0): op straatniveau precies de bocht pakken met de Porsche 930 Turbo (rook + opvliegende blaadjes),
+// meebewegen langs het herstelde Bistrot Chapeau en strak inparkeren pal voor de Albert Heijn.
 const DUIK_OGEN = new THREE.CatmullRomCurve3([
   new THREE.Vector3(-4, 42, 52),
   new THREE.Vector3(-16, 17, 38),
@@ -1573,11 +1449,11 @@ const DUIK_DOELEN = new THREE.CatmullRomCurve3([
   new THREE.Vector3(-23.2, 1.0, 23.0),
 ]);
 const STRAAT_OGEN = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-29.2, 1.70, 26.8), // laag 3/4-achtervolgingspunt op de open kruising
+  new THREE.Vector3(-29.2, 1.70, 26.8), // laag op de open kruising
   new THREE.Vector3(-29.6, 1.55, 20.5), // laag bij de bocht, 2,9 m ten zuiden van Chapeau (z=17,60)
   new THREE.Vector3(-29.4, 1.85, 12.2), // open straat, 2,18 m ten oosten van Chapeau's oostgevel (x=-31,58)
   new THREE.Vector3(-30.6, 2.55, 4.4),  // 6,3 m ten noorden van Chapeau (z=10,72), vrij zicht naar AH
-  new THREE.Vector3(-34.8, 3.85, 3.6),  // eindkader op de geparkeerde Porsche pal voor de Albert Heijn
+  new THREE.Vector3(-34.8, 3.85, 3.6),  // eindkader op de geparkeerde Porsche voor de AH
 ]);
 const STRAAT_DOELEN = new THREE.CatmullRomCurve3([
   new THREE.Vector3(-23.2, 1.0, 23.0),
@@ -1786,40 +1662,34 @@ async function begin() {
     scene.add(l);
   }
 
-  // Dwarrelende Kuifje-herfstblaadjes in 3 kleuren (goudgeel, vurig oranje, karmijnrood) — schuin door de wind én op de natte stoep.
-  const bladGeo = new THREE.PlaneGeometry(0.24, 0.24);
+  // Enkele dwarrelende herfstblaadjes bij de bomen op de kruising (1 instanced draw call).
+  const bladGeo = new THREE.PlaneGeometry(0.18, 0.18);
   const bladMat = new THREE.MeshBasicMaterial({ map: bladBeeld(), transparent: true, alphaTest: 0.2, side: THREE.DoubleSide });
-  const AANTAL_BLAD = 64;
+  const AANTAL_BLAD = 24;
   bladeren = new THREE.InstancedMesh(bladGeo, bladMat, AANTAL_BLAD);
   bladeren.frustumCulled = false;
   bladeren.renderOrder = 11;
-  const bladTinten = [new THREE.Color('#f4c236'), new THREE.Color('#e86b24'), new THREE.Color('#cc3824')];
   let bZaad = 42;
   const bKans = () => (bZaad = (bZaad * 16807) % 2147483647) / 2147483647;
   const bDummy = new THREE.Object3D();
   for (let i = 0; i < AANTAL_BLAD; i++) {
-    const opGrond = i >= 46;
     const d = {
-      x: -33 + bKans() * 43,
-      y0: opGrond ? 0.065 : (0.9 + bKans() * 5.2),
-      z: -10 + bKans() * 39,
+      x: -24 + bKans() * 28,
+      y0: 1.4 + bKans() * 4.8,
+      z: 6 + bKans() * 20,
       fase: bKans() * Math.PI * 2,
-      snel: 0.55 + bKans() * 0.55,
-      zwaai: 0.8 + bKans() * 1.3,
-      schaal: opGrond ? (0.95 + bKans() * 0.55) : (0.85 + bKans() * 0.65),
-      opGrond,
+      snel: 0.45 + bKans() * 0.45,
+      zwaai: 0.7 + bKans() * 1.1,
+      schaal: 0.75 + bKans() * 0.55,
     };
     bladData.push(d);
     bDummy.position.set(d.x, d.y0, d.z);
-    if (opGrond) bDummy.rotation.set(-Math.PI / 2, 0, d.fase);
-    else bDummy.rotation.set(d.fase, d.fase * 0.7, d.fase * 1.3);
+    bDummy.rotation.set(d.fase, d.fase * 0.7, d.fase * 1.3);
     bDummy.scale.setScalar(d.schaal);
     bDummy.updateMatrix();
     bladeren.setMatrixAt(i, bDummy.matrix);
-    bladeren.setColorAt(i, bladTinten[i % bladTinten.length]);
   }
   bladeren.instanceMatrix.needsUpdate = true;
-  if (bladeren.instanceColor) bladeren.instanceColor.needsUpdate = true;
   scene.add(bladeren);
 
   vogels = bouwVogels();
@@ -1827,7 +1697,7 @@ async function begin() {
   scene.add(vogels.group);
 
   naar(vraag.get('stand') || 'hoekpand', true);
-  kleur(vraag.get('stijl') || 'kuifje', vraag.get('licht') || 'herfst', true);
+  kleur(vraag.get('stijl') || 'gedempt', vraag.get('licht') || 'middag', true);
   maat();
   new ResizeObserver(maat).observe(doek);
   for (const k of document.querySelectorAll('[data-stand]')) k.addEventListener('click', () => naar(k.dataset.stand));
@@ -1841,7 +1711,7 @@ async function begin() {
 
   // Sneltoetsen: 1-6 voor standpunten, I voor de Porsche-intro, spatie voor rondleiding, L voor lichtstand.
   const standLijst = ['hoekpand', 'kruising', 'erf', 'straat', 'plein', 'dorp'];
-  const lichtLijst = ['herfst', 'middag', 'avond', 'schemer'];
+  const lichtLijst = ['middag', 'avond', 'schemer'];
   window.addEventListener('keydown', (ev) => {
     if (ev.target && /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.key >= '1' && ev.key <= '6') naar(standLijst[Number(ev.key) - 1]);
@@ -1891,15 +1761,12 @@ async function begin() {
       for (let i = 0; i < wolken.length; i++) {
         wolken[i].position.x = wolkBasis[i][0] + Math.sin(sec * 0.012 + i) * 38;
       }
-      const wind = 0.7 + LICHT.uNat.value * 1.4;
       for (let i = 0; i < AANTAL_BLAD; i++) {
         const d = bladData[i];
-        if (d.opGrond) continue;
-        const val = ((d.y0 - sec * d.snel * 0.58) % 5.6 + 5.6) % 5.6;
-        const y = val < 0.25 ? val + 5.6 : val;
-        const driftX = ((d.x + sec * d.snel * 1.15 * wind + 33) % 43) - 33;
-        bDummy.position.set(driftX + Math.sin(sec * d.snel * 1.3 + d.fase) * d.zwaai, y, d.z + Math.cos(sec * d.snel * 0.9 + d.fase) * d.zwaai * 0.7);
-        bDummy.rotation.set(sec * 1.8 + d.fase, sec * 1.1 + d.fase, Math.sin(sec * 2.2 + d.fase) * 1.1);
+        const val = (d.y0 - sec * d.snel * 0.45) % 5.4;
+        const y = val < 0.35 ? val + 5.4 : val;
+        bDummy.position.set(d.x + Math.sin(sec * d.snel + d.fase) * d.zwaai, y, d.z + Math.cos(sec * d.snel * 0.8 + d.fase) * d.zwaai * 0.6);
+        bDummy.rotation.set(sec * 1.4 + d.fase, sec * 0.9 + d.fase, Math.sin(sec * 1.8 + d.fase) * 0.9);
         bDummy.scale.setScalar(d.schaal);
         bDummy.updateMatrix();
         bladeren.setMatrixAt(i, bDummy.matrix);

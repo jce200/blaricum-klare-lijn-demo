@@ -11,27 +11,22 @@
 //   brandt    of ramen en lantaarns licht geven
 
 export const STEMMINGEN = {
-  herfst: {
-    naam: 'Herfst', zon: [224, 34], licht: [1.02, 1.0, 0.96], schaduw: [0.76, 0.80, 0.89],
-    lucht: { laag: '#edf2f4', midden: '#dce6ec', hoog: '#c7d8e4', band: [0.05, 0.16], wolk: 0.45 },
-    nevel: { kleur: '#dce6ec', van: 120, tot: 480, max: 0.52 }, brandt: false, wolken: true, plassen: 0.0, nat: 1.0, regen: 1.0,
-  },
   middag: {
     naam: 'Middag', zon: [215, 42], licht: [1, 1, 1], schaduw: [0.78, 0.80, 0.88],
     lucht: { laag: null, midden: null, hoog: null, band: [0.03, 0.08], wolk: 0.0 },
-    nevel: { kleur: null, van: 150, tot: 560, max: 0.5 }, brandt: false, wolken: true, plassen: 0.0, nat: 0.0, regen: 0.0,
+    nevel: { kleur: null, van: 150, tot: 560, max: 0.5 }, brandt: false, wolken: true, plassen: 0.0, regen: 0.0,
   },
   // Een lage zon uit het westen: lange schaduwen over de straat, warm licht, de schaduw paarsblauw.
   avond: {
     naam: 'Avond', zon: [258, 15], licht: [1.07, 0.97, 0.80], schaduw: [0.64, 0.61, 0.75],
     lucht: { laag: '#f8e2a6', midden: '#f0cfa2', hoog: '#b4cdd6', band: [0.04, 0.125], wolk: 0.65 },
-    nevel: { kleur: '#f1deb0', van: 90, tot: 430, max: 0.58 }, brandt: false, wolken: false, plassen: 0.0, nat: 0.0, regen: 0.0,
+    nevel: { kleur: '#f1deb0', van: 90, tot: 430, max: 0.58 }, brandt: false, wolken: false, plassen: 0.0, regen: 0.0,
   },
   // De zon is bijna onder (AIVD Werf-sfeer): petrol-blauwgroen, gloeiende abrikoosband, warm licht op de stoep & plassen!
   schemer: {
     naam: 'Schemer', zon: [286, 5], licht: [1.02, 0.74, 0.48], schaduw: [0.34, 0.48, 0.51],
     lucht: { laag: '#f6b765', midden: '#ec9545', hoog: '#2e5958', band: [0.03, 0.115], wolk: 1.0 },
-    nevel: { kleur: '#3b6765', van: 75, tot: 390, max: 0.58 }, brandt: true, wolken: false, plassen: 1.0, nat: 0.0, regen: 1.0,
+    nevel: { kleur: '#3b6765', van: 75, tot: 390, max: 0.58 }, brandt: true, wolken: false, plassen: 1.0, regen: 1.0,
   },
 };
 

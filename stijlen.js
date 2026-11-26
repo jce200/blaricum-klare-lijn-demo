@@ -111,37 +111,7 @@ const gedempt = {
   },
 };
 
-// Naar de twee Kuifje / Hergé-platen (herfstregen & auto-achtervolging): vuuroranje/goudgele herfstbomen,
-// koele blauwgrijze natte klinkers, heldere zandsteen-gevels, sprekende bordeaux-paarse lak en strakke inkt.
-const kuifje = {
-  naam: 'Kuifje',
-  lucht: '#d5e4ee', inkt: '#100e0c', papier: '#f6f2e6', wolk: '#ffffff', schaduwvlek: 0.13, lijn: 1.22, wolkvorm: 'stapel',
-  vakken: {
-    onbekend: '#dfd5c0', ondergrond: '#8c9c4a', straat: '#92a1b5', stoep: '#dcd7c9', erf: '#c9bba3', parkeervak: '#8595aa',
-    grind: '#e2d7bc', tuinpad: '#d8ceb6', markering: '#faf8f0', gazon: '#84a348', border: '#7a7038', berm: '#7f9a44',
-    haag: ['#6b7b34', '#505e26'], bloem: '#d94836', kei: ['#a8a69e', '#88867f'],
-    baksteen_rood: ['#c96045', '#ab4e36'], baksteen_bruin: ['#b26546', '#945238'], baksteen_geel: ['#e4bf7c', '#c7a262'],
-    pleister: ['#f3e7cb', '#d8ccb0'], kalkwit: ['#faf6eb', '#dedad0'], zwarthout: ['#31393e', '#23292d'],
-    dak_lei: ['#54687a', '#3d4d5c'], dak_grijs: ['#70757c', '#585d63'], dak_oranje: ['#d96d38', '#b8582a'],
-    dak_riet: ['#b89b5a', '#998048'], dak_antraciet: ['#454c54', '#31373e'], dak_grind: ['#bfb9ab', '#a29c90'],
-    dak_terracotta: ['#c95d3c', '#a84b2f'], dak_bruinrood: ['#784b3e', '#5e3a2f'], dak_koper: ['#6c9b8b', '#567f71'],
-    ruit_donker: ['#486274', '#374c5c'], ruit_licht: ['#9ec2d8', '#80a4ba'], raamlicht: '#f8d868',
-    kozijn_wit: ['#faf6eb', '#dedad0'], kozijn_zwart: ['#22272a', '#161a1d'], deur: ['#2f566c', '#234254'],
-    luik: ['#c43b2c', '#9e2e22'], overkapping: ['#e8dfc8', '#cbc2ac'], luifel: ['#f2ead6', '#d6ceb9'], luifel_groen: ['#3d7a5e', '#2e6049'],
-    hout: ['#b07f4c', '#92673b'], zwart: '#1a1715', geel: '#f0bc2e', blauw: '#3674b8', wit: '#fbf9f2', metaal: '#b4bcc2',
-    meubel_groen: '#3d7a5e', autolak: '#2f8c7a', autoraam: '#c8e0ee', autowiel: '#181614',
-    stam: ['#6f523a', '#543c2a'],
-    blad_a: ['#eab634', '#c99120'],
-    blad_b: ['#df6a26', '#b84c18'],
-    blad_c: ['#c23b26', '#96291a'],
-    figuur: '#e5b088', rood: '#d43628', glans: '#e6f2fa', bos: ['#9e7d34', '#7a5f24'], porsche: ['#7d2948', '#541830'],
-    zink: ['#9ba4ab', '#808990'], paneel: ['#31475c', '#233547'], g_wit: ['#faf6eb', '#dedad0'], g_licht: ['#d8d2c3', '#bcb6a8'],
-    g_grijs: ['#8e8c84', '#74726c'], g_donker: ['#2b2a29', '#1e1d1c'], g_bruin: ['#c48a4c', '#a36f3a'], g_rood: ['#d43628', '#b02a1f'],
-    g_groen: ['#3d7a5e', '#2e6049'], g_blauw: ['#3674b8', '#295d96'], g_geel: ['#f0bc2e', '#cca024'],
-  },
-};
-
-export const STIJLEN = { kuifje, gedempt, helder, warm, fris };
+export const STIJLEN = { gedempt, helder, warm, fris };
 
 const hex = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
 
