@@ -11,11 +11,11 @@
 //   brandt    of ramen en lantaarns licht geven
 
 export const STEMMINGEN = {
-  // Zuivere Klare Lijn "Mystery in Bunker Hill" (Nacht): petrol-avondlucht, géén waas, roomgele lantaarnkringen & ramen.
+  // Exacte Blaricum-nachtplaat: diep middernacht-leiblauw (#1b2b38), maansikkel, platte nachtwolken en warm goud licht!
   nacht: {
-    naam: 'Nacht', zon: [252, 34], licht: [1.0, 1.0, 1.0], schaduw: [0.84, 0.87, 0.90],
-    lucht: { laag: '#628a91', midden: '#507981', hoog: '#426870', band: [0.06, 0.22], wolk: 0.0 },
-    nevel: { kleur: '#507981', van: 260, tot: 700, max: 0.08 }, brandt: true, wolken: false, plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
+    naam: 'Nacht', zon: [248, 36], licht: [1.0, 1.0, 1.0], schaduw: [0.80, 0.84, 0.90],
+    lucht: { laag: '#253643', midden: '#1b2c38', hoog: '#162430', band: [0.06, 0.24], wolk: 0.0 },
+    nevel: { kleur: '#1f303d', van: 190, tot: 640, max: 0.22 }, brandt: true, wolken: false, plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
   },
   // Dezelfde zuivere Klare Lijn bij daglicht: vlak lichtblauw, géén waas, subtiele schaduwstap, nul arcering.
   dag: {
@@ -25,8 +25,8 @@ export const STEMMINGEN = {
   },
 };
 
-// Vakken die licht geven als het brandt, met het bleke warme roomgeel uit Mystery in Bunker Hill.
-const BRANDT = { ruit_aan: '#eae096', ruit_kantoor: '#f2e9a4', lamp: '#f8f2c2', raamlicht: '#eae096' };
+// Vakken die licht geven als het brandt, exact naar de warme goudgloed uit de Blaricum-nachtplaat.
+const BRANDT = { ruit_aan: '#dfd382', ruit_kantoor: '#c7bd78', lamp: '#fbee70', raamlicht: '#d8cb7a' };
 const OVERDAG = { ruit_aan: 'ruit_donker', ruit_kantoor: 'ruit_licht', lamp: 'kalkwit' };
 // De schaduwkleuren in stijlen.js zijn gekozen bij dit middaglicht; een stemming schuift ze daarvandaan.
 const MIDDAG = [0.88, 0.885, 0.905];

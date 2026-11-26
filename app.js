@@ -201,8 +201,10 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           }
         } else if (isBrandRuit) {
           if (uBunker > 0.5) {
-            // Zuiver vlak roomgeel raam met één strakke lichte spiegeling (geen modderige ruis erin).
-            k = mix(k, vec3(0.99, 0.97, 0.84), glans * 0.30);
+            // Exacte Monastic-etalage uit de nachtplaat: warm goud interieur met subtiele bovenrand en strakke schuine reflectie.
+            float boven = smoothstep(2.35, 2.48, vP.y);
+            k = mix(k, vec3(0.50, 0.51, 0.41), boven * 0.52);
+            k = mix(k, vec3(0.92, 0.88, 0.62), glans * 0.48);
           } else {
             float hoog = smoothstep(2.45, 2.55, vP.y);
             float onder = 1.0 - smoothstep(1.05, 1.16, vP.y);
@@ -212,27 +214,27 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
             k = mix(k, vec3(1.0, 0.96, 0.82), glans * 0.28);
           }
         } else if (uBunker > 0.5) {
-          k = mix(k, vec3(0.38, 0.55, 0.60), glans * 0.42);
+          k = mix(k, vec3(0.24, 0.36, 0.45), glans * 0.45);
         }
       }
 
-      // 2. MYSTERY IN BUNKER HILL: vlijmscherpe roomgele straatlantaarnkringen & etalagebundels (zonder zware slagschaduw dwars door het plein).
+      // 2. NACHTPLAAT BLARICUM: warme goud-oker straatlantaarnkringen & etalagebundels tegen het diepe middernacht-asfalt!
       if (uBunker > 0.5) {
         if (isGrond && abs(n.y) > 0.7) {
           // Etalage-lichtvlakken uit het Monastic-hoekpand en Bistrot Chapeau (kaarsrecht afgesneden).
-          float e1 = gevelGloed(vP.xz, vec2(-12.1, 4.8), vec2(-5.2, 18.4), 3.4, 0.0);
-          float e2 = gevelGloed(vP.xz, vec2(-5.1, 18.4), vec2(6.7, 11.1), 3.2, 0.0);
+          float e1 = gevelGloed(vP.xz, vec2(-12.1, 4.8), vec2(-5.2, 18.4), 3.6, 0.0);
+          float e2 = gevelGloed(vP.xz, vec2(-5.1, 18.4), vec2(6.7, 11.1), 3.4, 0.0);
           float eChO = gevelGloed(vP.xz, vec2(-31.58, 17.5), vec2(-31.58, 10.9), 3.0, 0.0);
           float eChZ = gevelGloed(vP.xz, vec2(-41.0, 17.6), vec2(-31.6, 17.6), 2.8, 0.0);
-          float eHoek = lampCirkel(vP.xz, vec2(-5.2, 18.4), 3.8);
+          float eHoek = lampCirkel(vP.xz, vec2(-5.2, 18.4), 4.0);
 
-          // Messcherpe, perfect ronde Bunker Hill straatlantaarn-lichtcirkels.
-          float c1 = lampCirkel(vP.xz, vec2(8.9, 11.2), 5.4);
-          float c2 = lampCirkel(vP.xz, vec2(-12.77, 36.01), 5.6);
-          float c3 = lampCirkel(vP.xz, vec2(-32.06, 31.29), 5.6);
-          float c4 = lampCirkel(vP.xz, vec2(-23.6, 23.4), 5.0);
-          float c5 = lampCirkel(vP.xz, vec2(-26.4, 12.2), 4.6);
-          float c6 = lampCirkel(vP.xz, vec2(-25.6, -6.8), 5.0);
+          // Messcherpe, ronde goudgele straatlantaarn-lichtcirkels op kruising, straat en plein.
+          float c1 = lampCirkel(vP.xz, vec2(8.9, 11.2), 5.6);
+          float c2 = lampCirkel(vP.xz, vec2(-12.77, 36.01), 5.8);
+          float c3 = lampCirkel(vP.xz, vec2(-32.06, 31.29), 5.8);
+          float c4 = lampCirkel(vP.xz, vec2(-23.6, 23.4), 5.2);
+          float c5 = lampCirkel(vP.xz, vec2(-26.4, 12.2), 4.8);
+          float c6 = lampCirkel(vP.xz, vec2(-25.6, -6.8), 5.2);
           float c7 = lampCirkel(vP.xz, vec2(-40.14, -10.16), 5.6);
           float c8 = lampCirkel(vP.xz, vec2(22.95, 1.05), 5.4);
 
@@ -241,31 +243,20 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           float verlicht = max(kring, etalage);
 
           bool isGroen = (s == ${id.gazon} || s == ${id.berm});
-          vec3 lampKleur = isGroen ? vec3(0.50, 0.56, 0.37) : vec3(0.80, 0.77, 0.55); // zuiver Bunker Hill #ccc48c
+          vec3 lampKleur = isGroen ? vec3(0.64, 0.60, 0.30) : vec3(0.71, 0.67, 0.38); // exact #b5aa62 asfalt / #a3994d gras!
           k = mix(k, lampKleur, verlicht * 0.96);
-
-          // Paar kleine, strak getekende Bunker Hill-plasjes met een dun zwart inktrandje.
-          if (s == ${id.straat} || s == ${id.parkeervak}) {
-            float pf = klRuis(vec3(vP.x * 0.32 + 4.1, 1.3, vP.z * 0.55 - 2.4))
-                     + 0.38 * klRuis(vec3(vP.x * 0.70 + 8.0, 2.2, vP.z * 0.85));
-            float fwP = max(fwidth(pf), 0.01);
-            float inPlas = smoothstep(0.89 - fwP, 0.89 + fwP, pf);
-            float randPlas = smoothstep(0.85 - fwP, 0.85 + fwP, pf) * (1.0 - inPlas);
-            k = mix(k, vec3(0.36, 0.53, 0.57), inPlas);
-            k = mix(k, uInktKleur, randPlas);
-          }
         } else if (isGevel && abs(n.y) < 0.55) {
-          // Strakke, kaarsrechte schuine lichtgrens op het onderste deel van gevels naast straatlantaarns (zoals bij Hotel Contral).
+          // Warme zandgouden lantaarnkegel op het onderste deel van gevels (exact #827459 zoals links op Bistrot Chapeau!).
           float dMin = min(
             min(length(vP.xz - vec2(8.9, 11.2)), length(vP.xz - vec2(-5.2, 18.4))),
             min(min(length(vP.xz - vec2(-32.06, 31.29)), length(vP.xz - vec2(-26.4, 12.2))),
                 min(length(vP.xz - vec2(-25.6, -6.8)), length(vP.xz - vec2(-12.77, 36.01))))
           );
-          float grensY = 4.6 - dMin * 0.38;
+          float grensY = 4.8 - dMin * 0.40;
           float fwY = max(fwidth(vP.y - grensY), 0.015);
-          float muurLicht = (1.0 - smoothstep(grensY - fwY, grensY + fwY, vP.y)) * step(dMin, 11.0);
-          vec3 okerGevel = vec3(0.62, 0.60, 0.42); // helder, egaal Bunker Hill verlicht gevel-oker
-          k = mix(k, okerGevel, muurLicht * 0.88);
+          float muurLicht = (1.0 - smoothstep(grensY - fwY, grensY + fwY, vP.y)) * step(dMin, 10.5);
+          vec3 okerGevel = vec3(0.51, 0.45, 0.35); // exact gemeten #827459!
+          k = mix(k, okerGevel, muurLicht * 0.92);
         }
       } else if (uBrandt > 0.5 && isGrond && abs(n.y) > 0.7) {
         // Oorspronkelijke Schemer-sfeer (AIVD Werf)
@@ -535,13 +526,12 @@ const lijnShader = () => new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide,
 });
 
-// ---- De lucht: drie gouache-banden met ronde, bollende wolkenbogen (geen scherpe zaagtanden)
-// en in de schemer een subtiele schuine AIVD-Werf-regenbui.
+// ---- De lucht: vlakke banden, met in de nacht de crèmegele maansikkel en slanke platte Klare Lijn-nachtwolkjes.
 const luchtShader = () => new THREE.ShaderMaterial({
   uniforms: {
     uLaag: { value: new THREE.Color() }, uMidden: { value: new THREE.Color() }, uHoog: { value: new THREE.Color() },
     uBand: { value: new THREE.Vector2(0.03, 0.1) }, uWolk: { value: 0 },
-    uRegen: LICHT.uRegen, uTijd: LICHT.uTijd,
+    uBunker: LICHT.uBunker, uRegen: LICHT.uRegen, uTijd: LICHT.uTijd,
   },
   vertexShader: `
     varying vec3 vR;
@@ -553,13 +543,13 @@ const luchtShader = () => new THREE.ShaderMaterial({
   fragmentShader: `
     uniform vec3 uLaag, uMidden, uHoog;
     uniform vec2 uBand;
-    uniform float uWolk, uRegen, uTijd;
+    uniform float uWolk, uBunker, uRegen, uTijd;
     varying vec3 vR;
     ${RUIS}
     void main() {
       vec3 r = normalize(vR);
       float az = atan(r.z, r.x);
-      // Bollende wolkenbogen: compacte ronde toppen met rustige hoogte onder een diepe petrol-bovenlucht.
+      // Bollende wolkenbogen: compacte ronde toppen met rustige hoogte onder een diepe bovenlucht.
       float boog1 = sqrt(max(0.0, 1.0 - pow(abs(sin(az * 11.5 + 0.4 + 0.35 * sin(az * 4.0))), 1.6)));
       float boog2 = sqrt(max(0.0, 1.0 - pow(abs(sin(az * 24.0 - 1.1 + 0.45 * cos(az * 6.0))), 1.7)));
       float deining = 0.5 + 0.5 * klRuis(vec3(cos(az) * 2.8, 2.1, sin(az) * 2.8));
@@ -571,25 +561,47 @@ const luchtShader = () => new THREE.ShaderMaterial({
       vec3 k = mix(uLaag, uMidden, smoothstep(g1 - fw, g1 + fw, h));
       k = mix(k, uHoog, smoothstep(g2 - fw, g2 + fw, h));
 
+      // Platte, slanke Klare Lijn-nachtwolkstrepen en crèmegele maansikkel (exact naar de Blaricum-nachtplaat!).
+      if (uBunker > 0.5 && h > 0.08) {
+        // Slanke, uitgerekte horizontale wolkstrepen met vlakke onderkant en zachte bovenboog (geen ovale schijf).
+        float golf = 0.008 * sin(az * 7.0 + 1.2) + 0.005 * sin(az * 15.0 - 0.8);
+        float w1X = smoothstep(0.35, 0.52, sin(az * 2.1 + 0.8));
+        float w1Y = smoothstep(0.245, 0.250, h) * (1.0 - smoothstep(0.262 + golf, 0.268 + golf, h));
+        float w2X = smoothstep(0.45, 0.62, sin(az * 2.7 - 1.1));
+        float w2Y = smoothstep(0.195, 0.200, h) * (1.0 - smoothstep(0.208 + golf * 0.7, 0.213 + golf * 0.7, h));
+        float w3X = smoothstep(0.50, 0.68, sin(az * 3.3 + 2.4));
+        float w3Y = smoothstep(0.310, 0.315, h) * (1.0 - smoothstep(0.324 + golf * 0.8, 0.330 + golf * 0.8, h));
+        float wolk = clamp(w1X * w1Y + w2X * w2Y + w3X * w3Y, 0.0, 1.0);
+        k = mix(k, vec3(0.21, 0.28, 0.34), wolk * 0.82);
+
+        // Strakke crèmegele maansikkel (#faf5c1) met dun zwart inktlijntje hoog rechtsboven het hoekpand.
+        vec3 maanDir = normalize(vec3(0.92, 0.22, -0.02));
+        vec3 mRechts = normalize(cross(vec3(0.0, 1.0, 0.0), maanDir));
+        vec3 mOp = cross(maanDir, mRechts);
+        float u = dot(r, mRechts);
+        float v = dot(r, mOp);
+        if (dot(r, maanDir) > 0.96) {
+          float rad = 0.025;
+          float d1 = length(vec2(u, v));
+          float d2 = length(vec2(u - 0.011, v - 0.004));
+          float fwM = max(fwidth(d1), 0.0012);
+          float inSchijf = 1.0 - smoothstep(rad - fwM, rad + fwM, d1);
+          float uitHap = 1.0 - smoothstep(rad * 0.86 - fwM, rad * 0.86 + fwM, d2);
+          float sikkel = clamp(inSchijf * (1.0 - uitHap), 0.0, 1.0);
+          float randSchijf = (1.0 - smoothstep(rad + 0.0024 - fwM, rad + 0.0024 + fwM, d1)) * (1.0 - inSchijf);
+          float randHap = (1.0 - smoothstep(rad * 0.86 + 0.0020 - fwM, rad * 0.86 + 0.0020 + fwM, d2)) * inSchijf * (1.0 - uitHap);
+          float inktRand = clamp(randSchijf * (1.0 - uitHap) + randHap, 0.0, 1.0);
+          k = mix(k, vec3(0.02, 0.03, 0.04), inktRand);
+          k = mix(k, vec3(0.98, 0.96, 0.76), sikkel);
+        }
+      }
+
       // Subtiele tweede hoge wolkenband in de schemerlucht (petrol-lichter) voor diepte.
       if (uWolk > 0.7) {
         float g3 = g2 + 0.075 + 0.018 * boog2;
         float g4 = g3 + 0.024 + 0.014 * boog1;
         float strook = smoothstep(g3 - fw, g3 + fw, h) * (1.0 - smoothstep(g4 - fw, g4 + fw, h));
         k = mix(k, mix(uHoog, uMidden, 0.20), strook * 0.50);
-      }
-
-      // Fijne schuine Van Dongen-regenstreepjes in de schemerlucht.
-      if (uRegen > 0.5 && h > 0.01) {
-        vec2 sc = gl_FragCoord.xy;
-        vec2 schuin = vec2(sc.x + sc.y * 0.24, sc.y - sc.x * 0.24 + uTijd * 220.0);
-        float kolom = floor(schuin.x / 26.0);
-        float celX = fract(schuin.x / 26.0);
-        float h1 = klHash(vec3(kolom, 3.1, 7.7));
-        float yLijn = fract((schuin.y + h1 * 180.0) / 145.0);
-        float isStreep = step(0.45, h1) * smoothstep(0.0, 0.04, abs(celX - 0.5) < 0.028 ? 1.0 : 0.0)
-                       * smoothstep(0.10, 0.14, yLijn) * (1.0 - smoothstep(0.38, 0.42, yLijn));
-        k = mix(k, vec3(0.84, 0.87, 0.82), isStreep * 0.22);
       }
 
       gl_FragColor = vec4(k, 1.0);
@@ -722,7 +734,7 @@ function kleur(naam, licht, meteen = false) {
   slagMat.color.set(st.inkt);
   lijnMaat = doel.lijnMaat;
   for (const w of wolken) { w.material.map = wolkBeeld(st); w.visible = sm.wolken; }
-  for (const l of lampen) l.visible = sm.brandt && !sm.bunker;
+  for (const l of lampen) l.visible = sm.brandt;
   if (vogels) vogels.group.visible = !sm.brandt;
   const anders = LICHT.uZon.value.distanceTo(doel.zon) > 1e-4 || !LICHT.uSlagKaart.value;
   LICHT.uZon.value.copy(doel.zon);
@@ -830,15 +842,20 @@ function wolkBeeld(st) {
   return t;
 }
 
-// De gloed om een brandende lantaarn: een vlakke roomgele schijf, exact in de kleur van de Bunker Hill-lantaarns.
+// De gloed om een brandende lantaarn: een compact, warm-goud pitje (#fbee70) zoals op de Blaricum-nachtplaat.
 function gloedBeeld() {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = 'rgba(235, 226, 162, 0.30)';
-  g.beginPath(); g.arc(128, 128, 120, 0, Math.PI * 2); g.fill();
-  g.fillStyle = 'rgba(248, 242, 198, 0.68)';
-  g.beginPath(); g.arc(128, 128, 56, 0, Math.PI * 2); g.fill();
+  const grad = g.createRadialGradient(128, 128, 18, 128, 128, 118);
+  grad.addColorStop(0.0, 'rgba(251, 238, 112, 0.92)');
+  grad.addColorStop(0.32, 'rgba(235, 214, 96, 0.55)');
+  grad.addColorStop(0.70, 'rgba(210, 190, 88, 0.14)');
+  grad.addColorStop(1.0, 'rgba(210, 190, 88, 0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  g.fillStyle = '#fff8b8';
+  g.beginPath(); g.arc(128, 128, 30, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -1179,8 +1196,8 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
   group.add(schaduw);
 
   // Ronde 930-koplampen met strakke zwarte inktomlijning (zoals de auto's op de Bunker Hill-cover) + 930 Turbo achterlichtbalk.
-  const kopMat = new THREE.MeshBasicMaterial({ color: 0xf7f2c6, transparent: true, opacity: 0.0 });
-  const kopRandMat = new THREE.MeshBasicMaterial({ color: 0x080a0b, transparent: true, opacity: 0.0 });
+  const kopMat = new THREE.MeshBasicMaterial({ color: 0xfbee70, transparent: true, opacity: 0.0 });
+  const kopRandMat = new THREE.MeshBasicMaterial({ color: 0x040608, transparent: true, opacity: 0.0 });
   const kopGeo = new THREE.CircleGeometry(0.132, 20);
   const kopRandGeo = new THREE.CircleGeometry(0.158, 20);
   for (const lx of [-0.65, 0.63]) {
@@ -1199,16 +1216,16 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
   achterBalk.renderOrder = 11;
   chassis.add(achterBalk);
 
-  // Dubbele strakke klare-lijn roomgele koplampkegels over het donkere wegdek.
+  // Dubbele strakke klare-lijn goudgele koplampkegels over het donkere middernacht-wegdek.
   const kegelGeo = new THREE.BufferGeometry();
   kegelGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-    -0.66, 0.05, 1.95,  -0.44, 0.05, 1.95,  -0.25, 0.05, 12.2,
-    -0.66, 0.05, 1.95,  -0.25, 0.05, 12.2,  -2.85, 0.05, 12.2,
-     0.44, 0.05, 1.95,   0.66, 0.05, 1.95,   2.85, 0.05, 12.2,
-     0.44, 0.05, 1.95,   2.85, 0.05, 12.2,   0.25, 0.05, 12.2,
+    -0.66, 0.05, 1.95,  -0.44, 0.05, 1.95,  -0.25, 0.05, 12.8,
+    -0.66, 0.05, 1.95,  -0.25, 0.05, 12.8,  -3.10, 0.05, 12.8,
+     0.44, 0.05, 1.95,   0.66, 0.05, 1.95,   3.10, 0.05, 12.8,
+     0.44, 0.05, 1.95,   3.10, 0.05, 12.8,   0.25, 0.05, 12.8,
   ], 3));
   const kegelMat = new THREE.MeshBasicMaterial({
-    color: 0xded796, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide,
+    color: 0xcfbb60, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -3,
   });
   const kegel = new THREE.Mesh(kegelGeo, kegelMat);
@@ -1457,7 +1474,7 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
     zetLicht(brandt, inktKleur, lichtNaamNu) {
       const isNacht = lichtNaamNu === 'nacht' || lichtNaamNu === 'bunker';
       const sterkte = brandt;
-      kegelMat.opacity = isNacht ? sterkte * 0.56 : sterkte * 0.44;
+      kegelMat.opacity = isNacht ? sterkte * 0.78 : sterkte * 0.44;
       kegel.visible = sterkte > 0.04;
       kopMat.opacity = sterkte * 0.96;
       kopRandMat.opacity = sterkte;
@@ -1755,7 +1772,7 @@ async function begin() {
   for (const [x, y, z] of model.lampen || []) {
     const l = new THREE.Sprite(new THREE.SpriteMaterial({ map: gloed, depthWrite: false, fog: false }));
     l.position.set(x, y, z);
-    l.scale.set(1.35, 1.35, 1);
+    l.scale.set(0.95, 0.95, 1);
     l.renderOrder = 12;
     lampen.push(l);
     scene.add(l);
