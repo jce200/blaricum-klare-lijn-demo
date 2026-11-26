@@ -150,20 +150,20 @@ const SLAGCODE = `
         k = max(k, d < uLamp[i].w * 0.62 ? 0.72 : 0.42);
       }
     }
-    // 2. Porsche-koplampbundels: raken het asfalt pas logisch vóór de voorbumper (nooit onder de auto!).
+    // 2. Porsche-koplampbundels: twee strakke uiteenwijkende Ligne Claire-lichtbundels vóór de voorbumper (nooit onder de auto!).
     if (uKopAan > 0.05 && p.y < 0.34 && n.y > 0.65) {
       vec3 rel = p - uKopPos;
       float a = dot(rel, uKopDir);
-      if (a > 0.75 && a < 15.8) {
+      if (a > 0.55 && a < 15.8) {
         vec3 rechts = vec3(-uKopDir.z, 0.0, uKopDir.x);
         float lat = dot(rel, rechts);
-        float wL = 0.28 + (a - 0.75) * 0.21;
+        float wL = 0.22 + (a - 0.55) * 0.19;
         float dMin = min(abs(lat - 0.63), abs(lat + 0.65)) / wL;
-        float neus = (a - 0.75) / 0.65;
+        float neus = (a - 0.55) / 0.45;
         bool inNeus = neus >= 1.0 || (dMin * dMin + (1.0 - neus) * (1.0 - neus) < 1.0);
-        float reik = a + 1.5 * golf;
+        float reik = a + 0.35 * golf;
         if (inNeus && dMin < 1.0 && reik < 15.2) {
-          float bundel = (reik < 8.8 && dMin < 0.78) ? 0.76 : 0.44;
+          float bundel = (reik < 8.4 && dMin < 0.72) ? 0.72 : 0.42;
           k = max(k, bundel * uKopAan);
         }
       }
@@ -171,7 +171,7 @@ const SLAGCODE = `
     return k * uNacht;
   }`;
 
-// ---- De vlakken: egale klare-lijn-tonen plus echte straatlantaarnkringen en live Porsche-koplampbundels bij nacht.
+// ---- De vlakken: egale klare-lijn-tonen + spaarzame losse Hergé-bakstenen, muurplint, grindkiezels en nachtlamplicht.
 const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: new Float32Array(vakken * 6) }, ...LICHT },
   vertexShader: `
@@ -195,9 +195,104 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       bool inSlag = uKlare > 0.5 ? false : klSlag(vP, n, 0.17);
       bool licht = dot(n, uZon) > 0.08 && !inSlag;
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
+      float dist = length(cameraPosition - vP);
 
       bool isRuit = (s == ${id.ruit_donker} || s == ${id.ruit_licht} || s == ${id.ruit_aan} || s == ${id.ruit_kantoor});
       bool isBrandRuit = (s == ${id.ruit_kantoor} || s == ${id.ruit_aan} || s == ${id.raamlicht});
+      bool isBaksteen = (s == ${id.baksteen_rood} || s == ${id.baksteen_bruin} || s == ${id.baksteen_geel});
+      bool isGrind = (s == ${id.erf} || s == ${id.grind} || s == ${id.tuinpad});
+
+      // 0a. Ligne Claire losse bakstenen & donkere muurplint op verticale baksteengevels (zoals bij Hergé & Chaland!):
+      //     Nooit een druk raster: alleen spaarzame groepjes van 2–5 losse stenen in halfsteensverband + subtiele tintvariatie!
+      if (isBaksteen && abs(n.y) < 0.35 && dist < 44.0) {
+        float fadeB = 1.0 - smoothstep(22.0, 42.0, dist);
+        // Strakke hardstenen muurplint onderaan de gevel (y < 0.40 m) met een heldere horizontale inktrand
+        float fwY = max(fwidth(vP.y), 0.0025);
+        float inPlint = 1.0 - smoothstep(0.40 - fwY, 0.40 + fwY, vP.y);
+        float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.40))) * fadeB;
+        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.18, 0.21, 0.24) : vec3(0.55, 0.54, 0.51);
+        k = mix(k, plintKleur, inPlint * 0.84);
+        k = mix(k, uInktKleur, plintRand * 0.92);
+
+        if (vP.y > 0.42) {
+          vec3 tang = normalize(vec3(-n.z, 0.0, n.x));
+          float u = dot(vP, tang);
+          float v = vP.y;
+          // Echt Nederlands Waalformaat (22 × 6,5 cm) in halfsteensverband
+          float bh = 0.066, bw = 0.22;
+          float rij = floor(v / bh);
+          float uOff = u + mod(rij, 2.0) * (bw * 0.5);
+          float kol = floor(uOff / bw);
+          vec2 f = vec2(fract(uOff / bw), fract(v / bh));
+
+          // Organische groepjes (clusters) zodat ~12% van de muur losse getekende stenen toont en 88% strak egaal blijft!
+          vec3 grp = floor(vec3(uOff * 0.92, v * 1.45, dot(vP, n) * 0.5));
+          float hGrp = klHash(grp + vec3(4.3, 1.9, 7.1));
+          float hSteen = klHash(vec3(kol, rij, floor(dot(vP, n) * 2.0) + 13.7));
+          // Zorg dat ook de smalle bakstenen pier rondom de Monastic-intercom (7.989, 1.52, -1.686) 3–4 fraaie losse stenen heeft!
+          float bijBel = 1.0 - smoothstep(0.55, 0.78, length(vP - vec3(7.989, 1.52, -1.686)));
+          float drempel = hGrp > 0.64 ? 0.56 : mix(0.945, 0.78, bijBel);
+          if (hSteen > drempel) {
+            // Subtiele vlakke kleuraccentuering op losse bakstenen (iets warmer/donkerder per steen)
+            float tint = hSteen > 0.84 ? 1.14 : 0.87;
+            k *= mix(1.0, tint, fadeB * 0.85);
+            // Haarscherpe anti-aliased inktlijn rond de losse baksteen
+            float fwU = max(fwidth(uOff / bw), 0.008);
+            float fwV = max(fwidth(v / bh), 0.015);
+            float dikU = max(0.022, fwU * 1.15);
+            float dikV = max(0.055, fwV * 1.15);
+            float randU = max(1.0 - smoothstep(dikU - fwU, dikU + fwU, f.x), smoothstep(1.0 - dikU - fwU, 1.0 - dikU + fwU, f.x));
+            float randV = max(1.0 - smoothstep(dikV - fwV, dikV + fwV, f.y), smoothstep(1.0 - dikV - fwV, 1.0 - dikV + fwV, f.y));
+            float lijnS = max(randU, randV);
+            k = mix(k, uInktKleur, lijnS * fadeB * 0.86);
+          } else if (hGrp > 0.72 && hSteen > 0.44 && hSteen < 0.50) {
+            // Enkele losse korte horizontale voegstreepjes voor typische Hergé-suggestie
+            float fwV = max(fwidth(v / bh), 0.015);
+            float dikV = max(0.050, fwV * 1.1);
+            float voeg = (1.0 - smoothstep(dikV - fwV, dikV + fwV, f.y)) * step(0.15, f.x) * step(f.x, 0.85);
+            k = mix(k, uInktKleur, voeg * fadeB * 0.72);
+          }
+        }
+      }
+
+      // 0b. Ligne Claire spaarzame grindkiezels & korte inktstreepjes op de oprit / het erf (rustig, 92% egaal vlak!)
+      if (isGrind && n.y > 0.85 && dist < 30.0) {
+        float fadeG = 1.0 - smoothstep(12.0, 28.0, dist);
+        // Fijne groepjes van kleine ovale kiezelsteentjes & korte horizonstreepjes
+        vec2 gCel = floor(vP.xz * 2.1);
+        vec2 gF = fract(vP.xz * 2.1);
+        float hC = klHash(vec3(gCel, 9.4));
+        if (hC > 0.74) {
+          float ox = 0.25 + 0.50 * klHash(vec3(gCel, 1.7));
+          float oz = 0.25 + 0.50 * klHash(vec3(gCel, 5.3));
+          vec2 d = (gF - vec2(ox, oz)) * vec2(1.0, 1.65);
+          float r = length(d);
+          float fw = max(fwidth(r), 0.008);
+          if (hC > 0.85) {
+            // Klein ovaal getekend kiezelsteentje (iets lichter vlak + dunne zwarte inktomtrek)
+            float inK = 1.0 - smoothstep(0.068 - fw, 0.068 + fw, r);
+            float randK = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(r - 0.068)));
+            k = mix(k, k * 1.16, inK * fadeG * 0.75);
+            k = mix(k, uInktKleur, randK * fadeG * 0.80);
+          } else {
+            // Korte, fijne horizontale Hergé-grondstreep
+            float streep = (1.0 - smoothstep(0.016 - fw, 0.016 + fw, abs(gF.y - oz)))
+                         * (1.0 - smoothstep(0.11 - fw, 0.11 + fw, abs(gF.x - ox)));
+            k = mix(k, uInktKleur, streep * fadeG * 0.68);
+          }
+        }
+      } else if (s == ${id.stoep} && n.y > 0.85 && dist < 22.0) {
+        // Spaarzame Hergé-tegelvoegjes op de stoep dicht bij de camera
+        float fadeS = 1.0 - smoothstep(10.0, 20.0, dist);
+        vec2 tCel = floor(vP.xz * 1.65);
+        vec2 tF = fract(vP.xz * 1.65);
+        float hT = klHash(vec3(tCel, 14.2));
+        if (hT > 0.76) {
+          float fw = max(fwidth(tF.x), 0.008);
+          float voeg = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, tF.x)) * step(0.18, tF.y) * step(tF.y, 0.82);
+          k = mix(k, uInktKleur, voeg * fadeS * 0.55);
+        }
+      }
 
       // 1. Ruiten: verlichte etalages gloeien warm goud met schuine reflectie; donkere ruiten vangen een koele glansstreep.
       if (isRuit && abs(n.y) < 0.85) {
@@ -251,8 +346,7 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
   side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2,
 });
 
-// ---- Ronde vormen (kruinen, keien, de auto, mensen): dezelfde twee tonen, plus in Bunker Hill gitzwarte
-// hoogglans-auto's met vlijmscherpe crème-witte randlichten zoals de klassiekers op de cover!
+// ---- Ronde vormen (kruinen, keien, de auto, mensen): zuivere tweetoons Hergé-vlakken zonder 3D-CGI glansstrepen!
 const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: palet }, ...LICHT },
   vertexShader: `
@@ -283,28 +377,22 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
         : (vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32));
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
-      // Strakke klare-lijn glans op de gelakte Porsche en auto's: in zowel Dag als Nacht 92% strakke lak met dunne witte randlijn!
+      // Zuivere Hergé Ligne Claire auto-inkleuring (geen rommelige 3D-CGI glansstrepen!):
+      // rustige egale tweetoons lak met hooguit één kalme, vlakke lichtbaan langs de bovenste ronding.
       if (s == ${id.porsche} || s == ${id.autolak}) {
-        vec3 kijk = normalize(cameraPosition - vP);
-        vec3 halfV = normalize(normalize(uZon + vec3(0.0, 0.72, 0.0)) + kijk);
-        float sp = pow(max(dot(n, halfV), 0.0), 46.0);
-        float fw = max(fwidth(sp), 0.015);
-        float glans = smoothstep(0.76 - fw, 0.76 + fw, sp);
-        if (uKlare > 0.5) {
-          float fwN = max(fwidth(n.y), 0.012);
-          float randStreep = smoothstep(0.84 - fwN, 0.84 + fwN, n.y) * (1.0 - smoothstep(0.89 - fwN, 0.89 + fwN, n.y));
-          float streep = clamp(glans + randStreep * 0.75, 0.0, 1.0);
-          k = mix(k, uBunker > 0.5 ? vec3(0.95, 0.93, 0.82) : vec3(0.98, 0.98, 0.96), streep * 0.95);
-        } else {
-          k = mix(k, vec3(0.98, 0.95, 0.89), glans * 0.72);
-        }
+        float bovenGlans = smoothstep(0.74, 0.77, n.y) * (1.0 - smoothstep(0.92, 0.95, n.y));
+        vec3 hoogTint = uBunker > 0.5 ? vec3(0.24, 0.33, 0.42) : vec3(0.45, 0.62, 0.76);
+        k = mix(k, hoogTint, bovenGlans * 0.55);
       } else if (s == ${id.autoraam}) {
-        float diag = (vP.x + vP.z) * 1.4 + vP.y * 2.2;
-        float g = fract(diag * 0.65);
-        float fw = max(fwidth(diag * 0.65), 0.012);
-        float streep = smoothstep(0.20 - fw, 0.20 + fw, g) * (1.0 - smoothstep(0.30 - fw, 0.30 + fw, g));
-        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.85, 0.87, 0.79) : vec3(0.96, 0.98, 1.0);
-        k = mix(k, ruitGlans, streep * 0.65);
+        // Strakke diagonale Hergé-glansstreep op de autoruiten (zoals op de blauwe taxi in Kuifje!)
+        float diag = (vP.x + vP.z) * 1.45 + vP.y * 2.15;
+        float g = fract(diag * 0.62);
+        float fw = max(fwidth(diag * 0.62), 0.012);
+        float streep1 = smoothstep(0.18 - fw, 0.18 + fw, g) * (1.0 - smoothstep(0.27 - fw, 0.27 + fw, g));
+        float streep2 = smoothstep(0.31 - fw, 0.31 + fw, g) * (1.0 - smoothstep(0.35 - fw, 0.35 + fw, g));
+        float streep = clamp(streep1 + streep2, 0.0, 1.0);
+        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.46, 0.60, 0.70) : vec3(0.92, 0.96, 0.99);
+        k = mix(k, ruitGlans, streep * 0.62);
       } else if (s == ${id.blad_a} || s == ${id.blad_b} || s == ${id.blad_c}) {
         // Spaarzame, fijne Hergé-bladboogjes in de kruinen (geen drukke ruis).
         float dist = length(cameraPosition - vP);
@@ -331,7 +419,7 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
       if (s != ${id.lamp}) {
         float lp = klLamp(vP, n);
         if (lp > 0.001) {
-          float invloed = (s == ${id.porsche} || s == ${id.autowiel}) ? 0.14 : 0.75;
+          float invloed = (s == ${id.porsche} || s == ${id.autowiel}) ? 0.16 : 0.75;
           k = mix(k, uLampKleur, invloed * lp);
         }
       }
@@ -380,12 +468,12 @@ const rompRand = (lampSlot = -1) => new THREE.ShaderMaterial({
 
 // ---- De lijnen. Zuivere Ligne Claire in zowel Dag als Nacht: constante, ononderbroken, kaarsrechte Rotring-lijn,
 // alle patroon-arcering (klStap > 0) uit én flauwe 3D-polygoonfacetten weggefilterd op crease-hoek!
-const lijnShader = () => new THREE.ShaderMaterial({
+const lijnShader = (creaseLim = 0.58) => new THREE.ShaderMaterial({
   uniforms: {
     uInkt: { value: new THREE.Color() }, uRes: { value: new THREE.Vector2(1, 1) }, uLijn: { value: HAND.lijn },
     uBinnen: { value: HAND.binnen }, uBibber: { value: HAND.bibber }, uGolf: { value: HAND.golf }, uZwel: { value: HAND.zwel },
     uHapert: { value: new THREE.Vector3(...HAND.hapert) }, uPx: { value: 1 }, uNevel: LICHT.uNevel, uNevelMaat: LICHT.uNevelMaat,
-    uKlare: LICHT.uKlare,
+    uKlare: LICHT.uKlare, uCrease: { value: creaseLim },
   },
   vertexShader: `
     attribute vec3 aStart;
@@ -396,7 +484,7 @@ const lijnShader = () => new THREE.ShaderMaterial({
     attribute float klVer;
     attribute float klStap;
     uniform vec2 uRes;
-    uniform float uLijn, uBinnen, uBibber, uPx, uKlare;
+    uniform float uLijn, uBinnen, uBibber, uPx, uKlare, uCrease;
     varying vec3 vWereldW;      // plek in de wereld, gedeeld door w (zie onder)
     varying float vInvW;
     varying float vDwars;       // pixels uit het midden van de rechte lijn
@@ -422,8 +510,8 @@ const lijnShader = () => new THREE.ShaderMaterial({
       if (uKlare > 0.5) {
         // 1. Alle patroon-arcering (klinkers, dakpannen, steenvoegen) uit voor zuivere egale kleurvlakken!
         if (klStap > 0.0) maat = 0.0;
-        // 2. Crease-hoek filter (~125°): verberg flauwe 3D-polygoonfacetten binnen vormen, behoud silhouetten & echte hoeken!
-        if (!omtrek && dot(nA, nB) > 0.58) maat = 0.0;
+        // 2. Crease-hoek filter: verberg flauwe 3D-polygoonfacetten binnen vormen, behoud silhouetten & echte hoeken!
+        if (!omtrek && dot(nA, nB) > uCrease) maat = 0.0;
       } else if (klStap > 0.0) {
         maat *= smoothstep(2.6, 5.2, klStap * abs(dot(nA, kijk)) / (afstand * afstand) * uPx);
       }
@@ -523,7 +611,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, depthTest: true,
 });
 
-let palet, vakNamen, lijn, rand, lucht, wolken = [], wolkBasis = [], lampen = [], maan = null, lampGlasMat = null, lampPitMat = null, bladeren = null, bladData = [], slagMat, lijnMaat = 1;
+let palet, vakNamen, lijn, pLijnMat = null, rand, lucht, wolken = [], wolkBasis = [], lampen = [], maan = null, lampGlasMat = null, lampPitMat = null, bladeren = null, bladData = [], slagMat, lijnMaat = 1;
 let stijlNaam = 'bunker', lichtNaam = 'nacht';
 const slagDoel = new THREE.WebGLRenderTarget(SLAGMAAT, SLAGMAAT, { depthTexture: new THREE.DepthTexture(SLAGMAAT, SLAGMAAT, THREE.UnsignedIntType) });
 slagDoel.depthTexture.minFilter = slagDoel.depthTexture.magFilter = THREE.NearestFilter;
@@ -534,6 +622,7 @@ const diepteMat = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.D
 let slagMeshes = [];
 
 function slagKaart() {
+  if (LICHT.uKlare.value > 0.5) return;
   const z = LICHT.uZon.value;
   slagVeld = Math.min(280, Math.max(55, camera.position.distanceTo(stuur.target) * 1.25));
   slagMidden.copy(stuur.target).setY(0);
@@ -639,6 +728,7 @@ function pasKleurToe(a, b, t) {
   LICHT.uPlasKleur.value.lerpColors(a.plasKleur, b.plasKleur, e);
   LICHT.uInktKleur.value.lerpColors(a.inkt, b.inkt, e);
   lijn.material.uniforms.uInkt.value.copy(LICHT.uInktKleur.value);
+  if (pLijnMat) pLijnMat.uniforms.uInkt.value.copy(LICHT.uInktKleur.value);
   rand.uniforms.inkt.value.copy(LICHT.uInktKleur.value);
   if (lampGlasMat) {
     const br = LICHT.uBrandt.value;
@@ -1195,6 +1285,45 @@ function splitsLantaarnGlas(vPos, vVak, rPos, rNor, rVak, lampSlot, lampenLijst)
   };
 }
 
+// ---- Verwijder storende horizontale Blender-bloknaden midden over de vlakke bakstenen achtergevel van Monastic
+// (alleen de bekende interne muursneden op vaste hoogtes y = 0.75/1.10/1.40/1.90/2.00/2.25/2.80/2.90, nooit kozijnen!).
+function schoonAchtergevelLijnen(lPos, lN, lEig) {
+  const n = lPos.length / 6;
+  const houd = new Uint8Array(n);
+  const snedeY = [0.75, 1.10, 1.40, 1.90, 2.00, 2.25, 2.80, 2.90];
+  let aantal = 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * 6;
+    const x0 = lPos[o], y0 = lPos[o + 1], z0 = lPos[o + 2];
+    const x1 = lPos[o + 3], y1 = lPos[o + 4], z1 = lPos[o + 5];
+    let weg = false;
+    if (lEig[i * 3 + 2] === 0 && Math.abs(y0 - y1) < 0.025) {
+      const mx = (x0 + x1) * 0.5, my = (y0 + y1) * 0.5, mz = (z0 + z1) * 0.5;
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      if (mx > 7.0 && mx < 12.8 && mz > -5.6 && mz < 3.6 && len > 1.55) {
+        for (const sy of snedeY) {
+          if (Math.abs(my - sy) < 0.03) { weg = true; break; }
+        }
+      }
+      // En het ene losse korte naadstreepje op y=1.35..1.46 pal onder het Monastic-intercomplaatje
+      if (!weg && mx > 7.5 && mx < 8.4 && mz > -2.1 && mz < -1.3 && my > 1.32 && my < 1.46 && len > 0.3) {
+        weg = true;
+      }
+    }
+    if (!weg) { houd[i] = 1; aantal++; }
+  }
+  const nlPos = new Float32Array(aantal * 6), nlN = new Int8Array(aantal * 8), nlEig = new Float32Array(aantal * 3);
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    if (!houd[i]) continue;
+    nlPos.set(lPos.subarray(i * 6, i * 6 + 6), j * 6);
+    nlN.set(lN.subarray(i * 8, i * 8 + 8), j * 8);
+    nlEig.set(lEig.subarray(i * 3, i * 3 + 3), j * 3);
+    j++;
+  }
+  return { lPos: nlPos, lN: nlN, lEig: nlEig };
+}
+
 // ---- De echte rijdende Porsche 930 Turbo: scheurt door de bocht bij de kruising met subtiele Kuifje-uitlaatrook,
 // opvliegende herfstblaadjes en licht IN de echte koplampen + logische bundels vóór de auto op het asfalt.
 function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
@@ -1254,31 +1383,39 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   achterBalk.renderOrder = 11;
   chassis.add(achterBalk);
 
-  // Opengaand bestuurdersportier (+X links van de Porsche, gericht naar de Monastic-achterdeur) + subtiel warm instaplicht!
+  // Echt Ligne Claire bestuurdersportier (+X links van de Porsche, gericht naar de Monastic-achterdeur):
+  // exact dezelfde leiblauwe lak, zwarte rubber stootstrip, verchroomde deurklink en schuine zijruit met raamlijst!
   const deurScharnier = new THREE.Group();
   deurScharnier.position.set(0.84, 0.48, 0.62); // scharniert bij de A-stijl
-  const deurPaneel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.055, 0.54, 1.06),
-    new THREE.MeshBasicMaterial({ color: 0x05070a }),
-  );
+  const deurLakMat = new THREE.MeshBasicMaterial({ color: 0x253342 });
+  const deurInktMat = new THREE.MeshBasicMaterial({ color: 0x040608, side: THREE.BackSide });
+  const deurRuitMat = new THREE.MeshBasicMaterial({ color: 0x314a5e, transparent: true, opacity: 0.88, side: THREE.DoubleSide });
+  const deurPaneel = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.52, 1.06), deurLakMat);
   deurPaneel.position.set(0.02, 0.04, -0.53);
-  const deurInkt = new THREE.Mesh(
-    new THREE.BoxGeometry(0.068, 0.556, 1.076),
-    new THREE.MeshBasicMaterial({ color: 0x020304, side: THREE.BackSide }),
-  );
+  const deurInkt = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.538, 1.078), deurInktMat);
   deurInkt.position.copy(deurPaneel.position);
-  const deurGlans = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.98, 0.042),
-    new THREE.MeshBasicMaterial({ color: 0xebe6c8 }),
-  );
-  deurGlans.rotation.y = Math.PI / 2;
-  deurGlans.position.set(0.050, 0.25, -0.53);
-  const deurKlink = new THREE.Mesh(
-    new THREE.BoxGeometry(0.024, 0.032, 0.14),
-    new THREE.MeshBasicMaterial({ color: 0xc8cdd2 }),
-  );
-  deurKlink.position.set(0.052, 0.19, -0.92);
-  deurScharnier.add(deurPaneel, deurInkt, deurGlans, deurKlink);
+  // Zwarte rubberen stootstrip over het portier + verchroomde 930-deurklink
+  const deurStrip = new THREE.Mesh(new THREE.BoxGeometry(0.064, 0.046, 1.05), new THREE.MeshBasicMaterial({ color: 0x0e1318 }));
+  deurStrip.position.set(0.022, -0.05, -0.53);
+  const deurKlink = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.032, 0.145), new THREE.MeshBasicMaterial({ color: 0xb5c0c8 }));
+  deurKlink.position.set(0.055, 0.19, -0.90);
+  // Schuine zijruit + zwarte raamlijst bovenop het portier
+  const ruitVorm = new THREE.Shape();
+  ruitVorm.moveTo(0, 0); ruitVorm.lineTo(0.96, 0); ruitVorm.lineTo(0.76, 0.34); ruitVorm.lineTo(0.18, 0.34); ruitVorm.closePath();
+  const ruitGeo = new THREE.ShapeGeometry(ruitVorm);
+  ruitGeo.rotateY(Math.PI / 2);
+  const deurRuit = new THREE.Mesh(ruitGeo, deurRuitMat);
+  deurRuit.position.set(0.02, 0.30, -0.04);
+  deurRuit.rotation.z = -0.22;
+  const lijstBoven = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.026, 0.62), new THREE.MeshBasicMaterial({ color: 0x050709 }));
+  lijstBoven.position.set(-0.055, 0.635, -0.51);
+  const lijstVoor = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.40, 0.028), new THREE.MeshBasicMaterial({ color: 0x050709 }));
+  lijstVoor.position.set(-0.02, 0.465, -0.13);
+  lijstVoor.rotation.set(0.46, 0, -0.22);
+  const lijstAchter = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.38, 0.028), new THREE.MeshBasicMaterial({ color: 0x050709 }));
+  lijstAchter.position.set(-0.02, 0.465, -0.90);
+  lijstAchter.rotation.set(-0.48, 0, -0.22);
+  deurScharnier.add(deurPaneel, deurInkt, deurStrip, deurKlink, deurRuit, lijstBoven, lijstVoor, lijstAchter);
   deurScharnier.visible = false;
   chassis.add(deurScharnier);
 
@@ -1541,6 +1678,8 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
       }
       achterMat.opacity = eff * 0.92;
       schaduwMat.color.copy(inktKleur);
+      deurLakMat.color.setHex(brandt > 0.5 ? 0x253342 : 0x33597a);
+      deurRuitMat.color.setHex(brandt > 0.5 ? 0x314a5e : 0xb8d4e3);
     },
     zetMotorLicht(factor) {
       motorLicht = Math.max(0, Math.min(1, factor));
@@ -1555,7 +1694,7 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
     zetDeur(openT) {
       const o = Math.max(0, Math.min(1, openT));
       deurScharnier.visible = o > 0.01;
-      deurScharnier.rotation.y = o * 0.96;
+      deurScharnier.rotation.y = o * 1.15;
     },
     positie(uit) { return uit.copy(group.position); },
   };
@@ -1606,11 +1745,14 @@ function maat() {
   camera.updateProjectionMatrix();
   const px = renderer.getDrawingBufferSize(new THREE.Vector2());
   const dpr = renderer.getPixelRatio();
-  const u = lijn.material.uniforms;
-  u.uRes.value.copy(px);
-  u.uLijn.value = HAND.lijn * dpr * lijnMaat;
-  u.uBibber.value = HAND.bibber * dpr;
-  u.uGolf.value = HAND.golf * dpr;
+  for (const lm of [lijn.material, pLijnMat]) {
+    if (!lm) continue;
+    const u = lm.uniforms;
+    u.uRes.value.copy(px);
+    u.uLijn.value = HAND.lijn * dpr * lijnMaat;
+    u.uBibber.value = HAND.bibber * dpr;
+    u.uGolf.value = HAND.golf * dpr;
+  }
   rand.uniforms.maat.value.copy(px);
   rand.uniforms.dikte.value = HAND.lijn * 0.72 * dpr * lijnMaat;
 }
@@ -1843,7 +1985,8 @@ async function begin() {
 
   // Splits de echte Porsche 930 Turbo los van het statische dorp (incl. echte 3D-koplampen in slot 'lamp').
   const gesplitst = splitsPorsche(rPosRaw, rNorRaw, rVakRaw, lPosRaw, lNRaw, lEigRaw, id.wit, id.lamp);
-  const { lPos, lN, lEig } = gesplitst.statisch;
+  // Verwijder storende horizontale Blender-bloknaden midden over de bakstenen achtergevel van Monastic.
+  const { lPos, lN, lEig } = schoonAchtergevelLijnen(gesplitst.statisch.lPos, gesplitst.statisch.lN, gesplitst.statisch.lEig);
 
   // Haal alle straatlantaarn-glazen (slot 'lamp') los zodat het glas rondom echt transparant is (geen zwarte vlakken!).
   const lantaarnSplit = splitsLantaarnGlas(
@@ -1909,7 +2052,7 @@ async function begin() {
   g.setAttribute('klVer', new THREE.InterleavedBufferAttribute(eigen, 1, 1));
   g.setAttribute('klStap', new THREE.InterleavedBufferAttribute(eigen, 1, 2));
   g.instanceCount = lPos.length / 6;
-  const lMat = lijnShader();
+  const lMat = lijnShader(0.58);
   lijn = new THREE.Mesh(g, lMat);
   lijn.frustumCulled = false;
   lijn.renderOrder = 10;
@@ -1922,14 +2065,16 @@ async function begin() {
 
   const gloed = gloedBeeld();
 
-  // De echte geëxtraheerde Porsche 930 Turbo (licht IN de echte koplampen, uitlaatrook en opvliegende blaadjes)!
-  porsche = bouwPorscheLeven(gesplitst.porsche, rompMat, rand, lMat, gloed);
+  // De echte geëxtraheerde Porsche 930 Turbo: eigen scherpere crease-filter (0.78) zodat portieren,
+  // motorkap, wielkasten, bumpers en achterspoiler haarscherp in zwarte Hergé-inkt worden getekend!
+  pLijnMat = lijnShader(0.78);
+  porsche = bouwPorscheLeven(gesplitst.porsche, rompMat, rand, pLijnMat, gloed);
   scene.add(porsche.group);
 
-  // De echte Monastic-intercom naast de achterdeur en de mysterieuze Kuifje-bezoeker voor de verhaalintro!
-  intercom = bouwIntercom(gloed);
+  // De echte Monastic-intercom + wandlantaarn naast de achterdeur en de Hergé-bezoeker met schermruimte-omtrek!
+  intercom = bouwIntercom(gloed, lMat.uniforms.uRes, lMat.uniforms.uLijn);
   scene.add(intercom.group);
-  bezoeker = bouwBezoeker(LICHT.uZon, LICHT.uNacht);
+  bezoeker = bouwBezoeker(LICHT.uZon, LICHT.uNacht, lMat.uniforms.uRes, lMat.uniforms.uLijn);
   scene.add(bezoeker.root, bezoeker.belHandGroep);
 
   // Wolken uit Claude's g-klare-lijn: 11 vaste platen hoog rondom het dorp (overdag stapelwolken, 's nachts flarden).
@@ -2043,7 +2188,9 @@ async function begin() {
     if (vogels) vogels.update(0);
     if (SLAG) slagKaart();
     stuur.update();
-    lijn.material.uniforms.uPx.value = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    lijn.material.uniforms.uPx.value = uPxVal;
+    if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;
     renderer.render(scene, camera);
   };
   window.toonIntro = (tNorm, stijl, licht) => {
@@ -2052,7 +2199,9 @@ async function begin() {
     pasIntroFrameToe(tNorm, 0);
     if (SLAG) slagKaart();
     stuur.update();
-    lijn.material.uniforms.uPx.value = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    lijn.material.uniforms.uPx.value = uPxVal;
+    if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;
     renderer.render(scene, camera);
   };
 
@@ -2123,7 +2272,9 @@ async function begin() {
       if (Math.abs(wil - slagVeld) > 0.3 * slagVeld || slagMidden.distanceTo(new THREE.Vector3(stuur.target.x, 0, stuur.target.z)) > 0.35 * slagVeld) slagKaart();
     }
     // Pixels per meter op een meter afstand: daarmee rekent de lijn golflengtes en rijafstanden om naar het scherm.
-    lijn.material.uniforms.uPx.value = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
+    lijn.material.uniforms.uPx.value = uPxVal;
+    if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;
     renderer.render(scene, camera);
     beelden++;
     if (beelden > 3 && beelden <= 13) traagste = Math.max(traagste, nu - vorige);
