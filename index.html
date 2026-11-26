@@ -21,12 +21,14 @@
       <button type="button" data-stand="plein">Het plein</button>
       <button type="button" data-stand="dorp">Het dorp</button>
     </nav>
-    <nav class="keuze" aria-label="Licht">
+    <nav class="keuze" aria-label="Licht" hidden>
+      <button type="button" data-licht="bunker">Avond</button>
       <button type="button" data-licht="middag">Middag</button>
       <button type="button" data-licht="avond">Avond</button>
       <button type="button" data-licht="schemer">Schemer</button>
     </nav>
-    <nav class="keuze" aria-label="Inkleuring">
+    <nav class="keuze" aria-label="Inkleuring" hidden>
+      <button type="button" data-stijl="bunker">Bunker Hill</button>
       <button type="button" data-stijl="gedempt">Gedempt</button>
       <button type="button" data-stijl="helder">Helder</button>
       <button type="button" data-stijl="warm">Warm</button>
@@ -40,7 +42,7 @@
   <main class="kader">
     <canvas id="doek"></canvas>
     <aside class="cartouche" id="cartouche" aria-live="polite">
-      <strong id="cartouche-titel">Het hoekpand · Middag</strong>
+      <strong id="cartouche-titel">Het hoekpand · Avond</strong>
       <span id="cartouche-sub">Hoek Meentweg en Huizerweg, Blaricum</span>
     </aside>
     <p class="melding" id="melding">Het dorp wordt getekend.</p>
