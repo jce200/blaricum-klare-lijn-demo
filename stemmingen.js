@@ -11,17 +11,19 @@
 //   brandt    of ramen en lantaarns licht geven
 
 export const STEMMINGEN = {
-  // Exacte Blaricum-nachtplaat: diep middernacht-leiblauw (#1b2b38), maansikkel, platte nachtwolken en warm goud licht!
+  // Exacte Blaricum-nachtplaat: diep nachtblauw zoals in Claude's g-klare-lijn, met nachtwolken, maan en warm lamplicht.
   nacht: {
-    naam: 'Nacht', zon: [248, 36], licht: [1.0, 1.0, 1.0], schaduw: [0.80, 0.84, 0.90],
-    lucht: { laag: '#253643', midden: '#1b2c38', hoog: '#162430', band: [0.06, 0.24], wolk: 0.0 },
-    nevel: { kleur: '#1f303d', van: 190, tot: 640, max: 0.22 }, brandt: true, wolken: false, plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
+    naam: 'Nacht', zon: [70, 46], licht: [1.0, 1.0, 1.0], schaduw: [0.80, 0.84, 0.90],
+    lucht: { laag: '#21324a', midden: '#1e2d43', hoog: '#1a2638', band: [0.05, 0.17], wolk: 0.0 },
+    nevel: { kleur: '#1a2638', van: 190, tot: 640, max: 0.25 }, brandt: true, wolken: true, nacht: true,
+    lamplicht: '#e9d569', plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
   },
   // Dezelfde zuivere Klare Lijn bij daglicht: vlak lichtblauw, géén waas, subtiele schaduwstap, nul arcering.
   dag: {
     naam: 'Dag', zon: [215, 42], licht: [1.0, 1.0, 1.0], schaduw: [0.85, 0.87, 0.91],
     lucht: { laag: '#c4e0f0', midden: '#9ec8e2', hoog: '#89bad9', band: [0.05, 0.20], wolk: 0.0 },
-    nevel: { kleur: '#c4e0f0', van: 280, tot: 720, max: 0.06 }, brandt: false, wolken: true, plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 0.0,
+    nevel: { kleur: '#c4e0f0', van: 280, tot: 720, max: 0.06 }, brandt: false, wolken: true, nacht: false,
+    plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 0.0,
   },
 };
 
