@@ -74,7 +74,7 @@ const laad = async (naam, Soort) => {
 const LICHT = {
   uZon: { value: new THREE.Vector3(0, 1, 0) }, uLichtMat: { value: new THREE.Matrix4() }, uSlagKaart: { value: null },
   uSlag: { value: SLAG ? 1 : 0 }, uNevel: { value: new THREE.Color() }, uNevelMaat: { value: new THREE.Vector3(150, 560, 0.5) },
-  uBrandt: { value: 0 }, uPlassen: { value: 0 }, uBunker: { value: 0 }, uRegen: { value: 0 }, uTijd: { value: 0 },
+  uBrandt: { value: 0 }, uPlassen: { value: 0 }, uKlare: { value: 1 }, uBunker: { value: 1 }, uRegen: { value: 0 }, uTijd: { value: 0 },
   uPlasKleur: { value: new THREE.Color(0.92, 0.58, 0.27) }, uInktKleur: { value: new THREE.Color(0.06, 0.04, 0.03) },
 };
 
@@ -106,6 +106,7 @@ const SLAGCODE = `
   uniform vec3 uNevelMaat;
   uniform float uBrandt;
   uniform float uPlassen;
+  uniform float uKlare;
   uniform float uBunker;
   uniform vec3 uPlasKleur;
   uniform vec3 uInktKleur;
@@ -122,8 +123,8 @@ const SLAGCODE = `
     return som > 4.5;
   }
   vec3 klNevel(vec3 kleur, float afstand) {
-    // In Bunker Hill zuivere Klare Lijn: spiegelgladde egale kleurvlakken (aplats) zonder papierruis.
-    float vlek = uBunker > 0.5 ? 0.0 : (0.6 * klRuis(vec3(gl_FragCoord.xy * 0.055, 1.0)) + 0.7 * klRuis(vec3(gl_FragCoord.xy * 0.007, 7.0)));
+    // Zuivere Klare Lijn: spiegelgladde egale kleurvlakken (aplats) zonder papierruis in zowel Dag als Nacht.
+    float vlek = uKlare > 0.5 ? 0.0 : (0.6 * klRuis(vec3(gl_FragCoord.xy * 0.055, 1.0)) + 0.7 * klRuis(vec3(gl_FragCoord.xy * 0.007, 7.0)));
     return mix(kleur, uNevel, uNevelMaat.z * smoothstep(uNevelMaat.x, uNevelMaat.y, afstand)) * (1.0 + 0.022 * vlek);
   }`;
 
@@ -172,7 +173,7 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
     void main() {
       vec3 n = normalize(cross(dFdx(vP), dFdy(vP)));
       int s = int(vVak.x + 0.5);
-      bool inSlag = uBunker > 0.5 ? false : klSlag(vP, n, 0.17);
+      bool inSlag = uKlare > 0.5 ? false : klSlag(vP, n, 0.17);
       bool licht = dot(n, uZon) > 0.08 && !inSlag;
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
@@ -337,24 +338,24 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
     void main() {
       vec3 n = normalize(vN);
       int s = int(vVak.x + 0.5);
-      float rand = uBunker > 0.5 ? 0.12 : (-0.12 + 0.16 * klRuis(vP * 1.7));
-      bool licht = uBunker > 0.5
+      float rand = uKlare > 0.5 ? 0.12 : (-0.12 + 0.16 * klRuis(vP * 1.7));
+      bool licht = uKlare > 0.5
         ? (vVak.y > 0.5 && dot(n, uZon) > rand)
         : (vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32));
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
-      // Strakke klare-lijn glans op de gelakte Porsche en auto's: in Bunker Hill 92% gitzwart met alleen één fijne, strakke witte randlijn!
+      // Strakke klare-lijn glans op de gelakte Porsche en auto's: in zowel Dag als Nacht 92% strakke lak met dunne witte randlijn!
       if (s == ${id.porsche} || s == ${id.autolak}) {
         vec3 kijk = normalize(cameraPosition - vP);
         vec3 halfV = normalize(normalize(uZon + vec3(0.0, 0.72, 0.0)) + kijk);
         float sp = pow(max(dot(n, halfV), 0.0), 46.0);
         float fw = max(fwidth(sp), 0.015);
         float glans = smoothstep(0.76 - fw, 0.76 + fw, sp);
-        if (uBunker > 0.5) {
+        if (uKlare > 0.5) {
           float fwN = max(fwidth(n.y), 0.012);
           float randStreep = smoothstep(0.84 - fwN, 0.84 + fwN, n.y) * (1.0 - smoothstep(0.89 - fwN, 0.89 + fwN, n.y));
           float streep = clamp(glans + randStreep * 0.75, 0.0, 1.0);
-          k = mix(k, vec3(0.95, 0.93, 0.82), streep * 0.95);
+          k = mix(k, uBunker > 0.5 ? vec3(0.95, 0.93, 0.82) : vec3(0.98, 0.98, 0.96), streep * 0.95);
         } else {
           k = mix(k, vec3(0.98, 0.95, 0.89), glans * 0.72);
         }
@@ -363,7 +364,7 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
         float g = fract(diag * 0.65);
         float fw = max(fwidth(diag * 0.65), 0.012);
         float streep = smoothstep(0.20 - fw, 0.20 + fw, g) * (1.0 - smoothstep(0.30 - fw, 0.30 + fw, g));
-        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.85, 0.87, 0.79) : vec3(0.95, 0.97, 0.99);
+        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.85, 0.87, 0.79) : vec3(0.96, 0.98, 1.0);
         k = mix(k, ruitGlans, streep * 0.65);
       } else if (s == ${id.blad_a} || s == ${id.blad_b} || s == ${id.blad_c}) {
         // Spaarzame, fijne Hergé-bladboogjes in de kruinen (geen drukke ruis).
@@ -372,7 +373,7 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
           vec3 cel = floor(vP * 0.85);
           vec3 f = fract(vP * 0.85) - 0.5;
           float h = klHash(cel + vec3(3.7, 1.1, 8.3));
-          float drempel = uBunker > 0.5 ? 0.80 : 0.66;
+          float drempel = uKlare > 0.5 ? 0.80 : 0.66;
           if (h > drempel) {
             float r = length(vec2(f.x, f.y + 0.12));
             float fw = max(fwidth(r), 0.012);
@@ -390,14 +391,14 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
   polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2,
 });
 
-// ---- De omtrek van ronde vormen: in Bunker Hill 100% constante, gladde Klare Lijn-dikte zonder zwel-knobbels!
+// ---- De omtrek van ronde vormen: in zuivere Klare Lijn 100% constante, gladde dikte zonder zwel-knobbels!
 const rompRand = () => new THREE.ShaderMaterial({
   uniforms: { inkt: { value: new THREE.Color() }, dikte: { value: 2 }, maat: { value: new THREE.Vector2(1, 1) }, zwel: { value: HAND.zwel },
-    uNevel: LICHT.uNevel, uNevelMaat: LICHT.uNevelMaat, uBunker: LICHT.uBunker },
+    uNevel: LICHT.uNevel, uNevelMaat: LICHT.uNevelMaat, uKlare: LICHT.uKlare },
   vertexShader: `
     uniform float dikte;
     uniform float zwel;
-    uniform float uBunker;
+    uniform float uKlare;
     uniform vec2 maat;
     varying float vAfstand;
     ${RUIS}
@@ -406,7 +407,7 @@ const rompRand = () => new THREE.ShaderMaterial({
       vec4 n = projectionMatrix * vec4(normalize(normalMatrix * normal), 0.0);
       vec2 r = n.xy * maat;                       // richting op het scherm, in pixels
       float l = max(length(r), 1e-5);
-      float d = uBunker > 0.5
+      float d = uKlare > 0.5
         ? dikte * 0.95
         : dikte * (1.0 + zwel * 0.75 * klRuis(position * (0.55 + 6.0 / max(p.w, 1.0))));
       p.xy += (r / l) * d * 2.0 / maat * p.w;
@@ -420,14 +421,14 @@ const rompRand = () => new THREE.ShaderMaterial({
   side: THREE.BackSide,
 });
 
-// ---- De lijnen. In Bunker Hill echte Ligne Claire: constante, ononderbroken, kaarsrechte Rotring-lijn,
+// ---- De lijnen. Zuivere Ligne Claire in zowel Dag als Nacht: constante, ononderbroken, kaarsrechte Rotring-lijn,
 // alle patroon-arcering (klStap > 0) uit én flauwe 3D-polygoonfacetten weggefilterd op crease-hoek!
 const lijnShader = () => new THREE.ShaderMaterial({
   uniforms: {
     uInkt: { value: new THREE.Color() }, uRes: { value: new THREE.Vector2(1, 1) }, uLijn: { value: HAND.lijn },
     uBinnen: { value: HAND.binnen }, uBibber: { value: HAND.bibber }, uGolf: { value: HAND.golf }, uZwel: { value: HAND.zwel },
     uHapert: { value: new THREE.Vector3(...HAND.hapert) }, uPx: { value: 1 }, uNevel: LICHT.uNevel, uNevelMaat: LICHT.uNevelMaat,
-    uBunker: LICHT.uBunker,
+    uKlare: LICHT.uKlare,
   },
   vertexShader: `
     attribute vec3 aStart;
@@ -438,7 +439,7 @@ const lijnShader = () => new THREE.ShaderMaterial({
     attribute float klVer;
     attribute float klStap;
     uniform vec2 uRes;
-    uniform float uLijn, uBinnen, uBibber, uPx, uBunker;
+    uniform float uLijn, uBinnen, uBibber, uPx, uKlare;
     varying vec3 vWereldW;      // plek in de wereld, gedeeld door w (zie onder)
     varying float vInvW;
     varying float vDwars;       // pixels uit het midden van de rechte lijn
@@ -458,10 +459,10 @@ const lijnShader = () => new THREE.ShaderMaterial({
       vec3 kijk = cameraPosition - 0.5 * (ws + we);
       float afstand = length(kijk);
       bool omtrek = dot(nA, kijk) * dot(nB, kijk) <= 0.0;
-      float binnenFactor = uBunker > 0.5 ? 0.78 : uBinnen;
+      float binnenFactor = uKlare > 0.5 ? 0.78 : uBinnen;
       float maat = klDik * (omtrek ? 1.0 : binnenFactor) * clamp(sqrt(30.0 / max(afstand, 0.01)), 0.68, 1.0);
       if (klVer > 0.0) maat *= 1.0 - smoothstep(0.6 * klVer, klVer, afstand);
-      if (uBunker > 0.5) {
+      if (uKlare > 0.5) {
         // 1. Alle patroon-arcering (klinkers, dakpannen, steenvoegen) uit voor zuivere egale kleurvlakken!
         if (klStap > 0.0) maat = 0.0;
         // 2. Crease-hoek filter (~125°): verberg flauwe 3D-polygoonfacetten binnen vormen, behoud silhouetten & echte hoeken!
@@ -480,7 +481,7 @@ const lijnShader = () => new THREE.ShaderMaterial({
       vec2 d = len > 1e-4 ? r / len : vec2(1.0, 0.0);
       vec2 dwars = vec2(-d.y, d.x);
       float halve = 0.5 * uLijn * maat;
-      float bib = uBunker > 0.5 ? 0.0 : uBibber;
+      float bib = uKlare > 0.5 ? 0.0 : uBibber;
       float ruim = max(halve, 0.55) * 1.5 + bib * 2.2 + 1.5;
       float uit = max(halve, 0.55) + bib + 1.5;
       bool eind = position.y > 0.5;
@@ -492,13 +493,13 @@ const lijnShader = () => new THREE.ShaderMaterial({
       vLengte = len;
       vHalve = halve;
       vSoort = omtrek ? 0.0 : (klStap > 0.0 ? 2.0 : 1.0);
-      vOver = uBunker > 0.5 ? 0.0 : (0.3 + 1.6 * fract(sin(dot(aStart, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * smoothstep(2.0, 10.0, len));
+      vOver = uKlare > 0.5 ? 0.0 : (0.3 + 1.6 * fract(sin(dot(aStart, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * smoothstep(2.0, 10.0, len));
       vInvW = 1.0 / c.w;
       vWereldW = (eind ? we : ws) * vInvW;
     }`,
   fragmentShader: `
     uniform vec3 uInkt, uHapert, uNevel, uNevelMaat;
-    uniform float uBibber, uGolf, uZwel, uPx, uBunker;
+    uniform float uBibber, uGolf, uZwel, uPx, uKlare;
     varying vec3 vWereldW;
     varying float vInvW, vDwars, vLangs, vLengte, vHalve, vSoort, vOver;
     ${RUIS}
@@ -511,7 +512,7 @@ const lijnShader = () => new THREE.ShaderMaterial({
     void main() {
       float midden = 0.0;
       float halve = vHalve;
-      if (uBunker < 0.5) {
+      if (uKlare < 0.5) {
         vec3 p = vWereldW / vInvW;
         float ppm = uPx * vInvW;
         float kort = trapRuis(p, uGolf, ppm, 0.0);
@@ -597,7 +598,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
 });
 
 let palet, vakNamen, lijn, rand, lucht, wolken = [], wolkBasis = [], lampen = [], bladeren = null, bladData = [], slagMat, lijnMaat = 1;
-let stijlNaam = 'bunker', lichtNaam = 'bunker';
+let stijlNaam = 'bunker', lichtNaam = 'nacht';
 const slagDoel = new THREE.WebGLRenderTarget(SLAGMAAT, SLAGMAAT, { depthTexture: new THREE.DepthTexture(SLAGMAAT, SLAGMAAT, THREE.UnsignedIntType) });
 slagDoel.depthTexture.minFilter = slagDoel.depthTexture.magFilter = THREE.NearestFilter;
 const slagCam = new THREE.OrthographicCamera(-100, 100, 100, -100, 100, 900);
@@ -674,6 +675,7 @@ function kleurDoelStaat(st, sm) {
     nevelMaat: new THREE.Vector3(sm.nevel.van, sm.nevel.tot, sm.nevel.max),
     brandt: sm.brandt ? 1 : 0,
     plassen: sm.plassen || 0,
+    klare: sm.klare || 0,
     bunker: sm.bunker || 0,
     regen: sm.regen || 0,
     plasKleur: c(midden),
@@ -700,6 +702,7 @@ function pasKleurToe(a, b, t) {
   LICHT.uNevelMaat.value.lerpVectors(a.nevelMaat, b.nevelMaat, e);
   LICHT.uBrandt.value = a.brandt + (b.brandt - a.brandt) * e;
   LICHT.uPlassen.value = a.plassen + (b.plassen - a.plassen) * e;
+  LICHT.uKlare.value = a.klare + (b.klare - a.klare) * e;
   LICHT.uBunker.value = a.bunker + (b.bunker - a.bunker) * e;
   LICHT.uRegen.value = a.regen + (b.regen - a.regen) * e;
   LICHT.uPlasKleur.value.lerpColors(a.plasKleur, b.plasKleur, e);
@@ -727,8 +730,7 @@ function kleur(naam, licht, meteen = false) {
   maat();
   document.documentElement.style.setProperty('--papier', st.papier);
   document.documentElement.style.setProperty('--inkt', st.inkt);
-  for (const k of document.querySelectorAll('[data-stijl]')) k.setAttribute('aria-pressed', String(k.dataset.stijl === stijlNaam));
-  for (const k of document.querySelectorAll('[data-licht]')) k.setAttribute('aria-pressed', String(k.dataset.licht === lichtNaam));
+  for (const k of document.querySelectorAll('[data-tijd]')) k.setAttribute('aria-pressed', String(k.dataset.tijd === lichtNaam));
   werkCartoucheBij();
 
   if (meteen || !huidigeKleurStaat || isAfdruk || matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -748,6 +750,7 @@ function kleur(naam, licht, meteen = false) {
       nevelMaat: LICHT.uNevelMaat.value.clone(),
       brandt: LICHT.uBrandt.value,
       plassen: LICHT.uPlassen.value,
+      klare: LICHT.uKlare.value,
       bunker: LICHT.uBunker.value,
       regen: LICHT.uRegen.value,
       plasKleur: LICHT.uPlasKleur.value.clone(),
@@ -756,6 +759,12 @@ function kleur(naam, licht, meteen = false) {
     kleurReis = { t0: performance.now(), duur: 750, van, naar: doel };
     huidigeKleurStaat = doel;
   }
+}
+
+// Eén heldere schakelaar voor deze ene Klare Lijn-stijl: Nacht (Bunker Hill) of Dag.
+function zetTijd(tijd, meteen = false) {
+  if (tijd === 'dag') kleur('klareDag', 'dag', meteen);
+  else kleur('bunker', 'nacht', meteen);
 }
 
 // Wolken als tekening, uit de hand: "gouache" zonder naden, "stapel" met inktlijn, "band" als platte streek.
@@ -1171,7 +1180,7 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
 
   // Ronde 930-koplampen met strakke zwarte inktomlijning (zoals de auto's op de Bunker Hill-cover) + 930 Turbo achterlichtbalk.
   const kopMat = new THREE.MeshBasicMaterial({ color: 0xf7f2c6, transparent: true, opacity: 0.0 });
-  const kopRandMat = new THREE.MeshBasicMaterial({ color: 0x080a0b });
+  const kopRandMat = new THREE.MeshBasicMaterial({ color: 0x080a0b, transparent: true, opacity: 0.0 });
   const kopGeo = new THREE.CircleGeometry(0.132, 20);
   const kopRandGeo = new THREE.CircleGeometry(0.158, 20);
   for (const lx of [-0.65, 0.63]) {
@@ -1446,13 +1455,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat) {
       }
     },
     zetLicht(brandt, inktKleur, lichtNaamNu) {
-      const isAvond = lichtNaamNu === 'avond';
-      const isBunker = lichtNaamNu === 'bunker';
-      const sterkte = Math.max(brandt, isAvond ? 0.45 : 0.0);
-      kegelMat.opacity = isBunker ? 0.56 : sterkte * 0.44;
+      const isNacht = lichtNaamNu === 'nacht' || lichtNaamNu === 'bunker';
+      const sterkte = brandt;
+      kegelMat.opacity = isNacht ? sterkte * 0.56 : sterkte * 0.44;
       kegel.visible = sterkte > 0.04;
-      kopMat.opacity = Math.max(brandt * 0.96, isAvond ? 0.65 : 0.0);
-      achterMat.opacity = Math.max(brandt * 0.92, isAvond ? 0.48 : 0.0);
+      kopMat.opacity = sterkte * 0.96;
+      kopRandMat.opacity = sterkte;
+      achterMat.opacity = sterkte * 0.92;
       schaduwMat.color.copy(inktKleur);
     },
     positie(uit) { return uit.copy(group.position); },
@@ -1787,12 +1796,11 @@ async function begin() {
   scene.add(vogels.group);
 
   naar(vraag.get('stand') || 'hoekpand', true);
-  kleur(vraag.get('stijl') || 'bunker', vraag.get('licht') || 'bunker', true);
+  zetTijd(vraag.get('tijd') || 'nacht', true);
   maat();
   new ResizeObserver(maat).observe(doek);
   for (const k of document.querySelectorAll('[data-stand]')) k.addEventListener('click', () => naar(k.dataset.stand));
-  for (const k of document.querySelectorAll('[data-stijl]')) k.addEventListener('click', () => kleur(k.dataset.stijl, lichtNaam));
-  for (const k of document.querySelectorAll('[data-licht]')) k.addEventListener('click', () => kleur(stijlNaam, k.dataset.licht));
+  for (const k of document.querySelectorAll('[data-tijd]')) k.addEventListener('click', () => zetTijd(k.dataset.tijd));
   const introKnop = document.getElementById('intro-knop');
   if (introKnop) introKnop.addEventListener('click', startIntro);
   const rondKnop = document.getElementById('rondleiding');

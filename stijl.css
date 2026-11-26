@@ -29,6 +29,7 @@ body {
 }
 .merk { height: 15px; width: auto; filter: invert(1); margin-right: auto; }
 .keuze { display: flex; flex-wrap: wrap; gap: 4px; }
+.keuze[hidden] { display: none; }
 .keuze button {
   font: inherit;
   color: var(--inkt);
