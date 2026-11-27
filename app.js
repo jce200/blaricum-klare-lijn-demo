@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STIJLEN } from './stijlen.js';
 import { STEMMINGEN, paletRij, zonRichting, hex } from './stemmingen.js';
-import { bouwIntercom, bouwBelHandCel, bouwBoekhandelBorden, bouwErfDetails, INTERCOM_POS, INTERCOM_NORMAAL } from './verhaal.js';
+import { bouwIntercom, bouwBelHandCel, bouwBoekhandelBorden, bouwErfDetails, bouwDorpSchim, bouwHalSchim, INTERCOM_POS, INTERCOM_NORMAAL } from './verhaal.js';
 
 const vraag = new URLSearchParams(location.search);
 const getal = (naam, anders) => (vraag.has(naam) ? Number(vraag.get(naam)) : anders);
@@ -853,6 +853,8 @@ let kleurReis = null;
 let porsche = null;
 let intercom = null;
 let belHand = null;
+let dorpSchim = null;
+let halSchim = null;
 let gangLichtAan = 0;
 let vogels = null;
 let rondleiding = null;
@@ -2021,12 +2023,6 @@ function stopRondleiding() {
 }
 
 const kaderEl = document.querySelector('.kader');
-const celDeurLaagEl = document.getElementById('cel-deur-laag');
-const celDeurFrames = [
-  document.getElementById('cel-deur-0'),
-  document.getElementById('cel-deur-1'),
-  document.getElementById('cel-deur-2'),
-];
 const bijschriftEl = document.getElementById('strip-bijschrift');
 const ballonEl = document.getElementById('strip-ballon');
 const ballonSprekerEl = document.getElementById('ballon-spreker');
@@ -2081,18 +2077,9 @@ function toonKeuzes(sleutel, items) {
   keuzeEl.hidden = isAfdruk && !window._toonUIInAfdruk;
 }
 
-function zetDeurCelFrame(idx) {
-  celDeurFrames.forEach((el, i) => {
-    if (el) el.hidden = i !== idx;
-  });
-}
-
-function zetRegieUI(inRegie, celStand = 'uit', bijschrift = '', deurFrame = 2) {
+function zetRegieUI(inRegie, bijschrift = '') {
   stuur.enabled = !inRegie;
   if (kaderEl) kaderEl.classList.toggle('in-regie', inRegie);
-  const toonDeur = celStand === 'deur';
-  if (celDeurLaagEl) celDeurLaagEl.hidden = !toonDeur;
-  if (toonDeur) zetDeurCelFrame(deurFrame);
   if (bijschriftEl) {
     bijschriftEl.hidden = !bijschrift || (isAfdruk && !window._toonUIInAfdruk);
     if (bijschrift) bijschriftEl.textContent = bijschrift;
@@ -2103,7 +2090,7 @@ function zetRegieUI(inRegie, celStand = 'uit', bijschrift = '', deurFrame = 2) {
 function stopIntro(autoParkeren = false) {
   const wasActief = !!intro;
   intro = null;
-  zetRegieUI(false, 'uit', '');
+  zetRegieUI(false, '');
   toonBallon('', '', '');
   toonKeuzes('', null);
   const knop = document.getElementById('intro-knop');
@@ -2117,17 +2104,20 @@ function stopIntro(autoParkeren = false) {
     }
   }
   if (belHand) belHand.zetReik(0, null);
+  if (dorpSchim) dorpSchim.zetVoortgang(-1, false);
+  if (halSchim) halSchim.zetStaat(0);
   LICHT.uGangLicht.value = gangLichtAan * LICHT.uBrandt.value;
   if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
   if (wasActief) werkCartoucheBij();
 }
 
-// ---- Film-noir openingsscène "De late afspraak" (geen gezichten, vaste vlotte shots, 3-frame limited cel):
-//   1 (0.00–0.44) Vaste camera op de klinker-kruising: de 930 zoeft vlot voorbij de handwijzer & lantaarn.
-//   2 (0.44–0.72) Vaste lage camera op het donkere Monastic-erf: auto draait het grind op en dooft koplampen; pand is donker.
-//   3 (0.72–0.91) Close-up intercom: gezichtloze schaduw langs de bakstenen muur + hand drukt op de bel (TRRRING!).
-//   4 (deur)      3-frame pixel-gelockte limited cel: donkere hal-deur -> KLIK halverlichting aan -> anonieme schim achter glas.
-//   5 (0.91–1.00) Outro: vloeiend uitzwaaien over het donkere erf met ALLEEN de halverlichting aan -> vrij 3D!
+// ---- 6-shots film-noir verhaallijn "Het adres zonder bord" (100% één consistente 3D-tekenstijl, nul gezichten!):
+//   1 (0.00–0.22) Hoog balkonshot over de kruising: een eenzame schim met aktetas steekt over bij Bistrot Chapeau.
+//   2 (0.22–0.44) Laag vast straathoekshot op de klinkers: de leiblauwe 911 zoeft vlot dwars langs de camera.
+//   3 (0.44–0.68) Voorgrond-framing langs garagemuur & haag: 911 draait het donkere Monastic-erf op; alle ramen zijn uit.
+//   4 (0.68–0.84) Close-up intercom: gezichtloze hoed-schaduw glijdt over de baksteenmuur + hand drukt op bel (TRRRING!).
+//   5 (hal)       Laag erfshot op de echte 3D-haldeur (3-beat in-world limited cel): donker -> KLIK hal aan -> schim achter glas!
+//   6 (0.92–1.00) Outro: camera trekt vloeiend terug over het erf met alleen de halverlichting aan -> vrij 3D!
 const hoekVoorScherm = (h) => (camera.aspect < 1 ? Math.min(62, h + 15) : h);
 const smooth01 = (x) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
 const MUUR_RECHTS = new THREE.Vector3(INTERCOM_NORMAAL.z, 0, -INTERCOM_NORMAAL.x);
@@ -2135,93 +2125,115 @@ const tmpBelPos = new THREE.Vector3();
 const tmpUitOog = new THREE.Vector3();
 const tmpUitDoel = new THREE.Vector3();
 
-function pasIntroFrameToe(tNorm, celOverride = null, deurFrame = 2) {
+function pasIntroFrameToe(tNorm, halBeat = -1) {
   const c = Math.max(0, Math.min(1, tNorm));
 
-  // 1. Porsche-tempo: vlot over de klinkerstraat (0.00..0.44 -> pT 0.05..0.52) en vloeiend het donkere erf op (0.44..0.72 -> pT 0.68..1.00).
+  // 1. Dorpsschim (Shot 1: steekt vlot de klinkerkruising over richting de Meentweg)
+  if (dorpSchim) {
+    if (c < 0.22) dorpSchim.zetVoortgang(c / 0.22, true);
+    else dorpSchim.zetVoortgang(-1, false);
+  }
+
+  // 2. Porsche-tempo: pas vanaf Shot 2 in beeld (0.22..0.44 langs de vaste straathoek; 0.44..0.68 het donkere erf op)
   let pT = 1.0;
-  if (c < 0.44) {
-    pT = 0.05 + (c / 0.44) * 0.47;
-  } else if (c < 0.72) {
-    pT = 0.68 + smooth01((c - 0.44) / 0.25) * 0.32;
+  if (c < 0.22) {
+    pT = 0.0;
+  } else if (c < 0.44) {
+    pT = 0.05 + ((c - 0.22) / 0.22) * 0.47;
+  } else if (c < 0.68) {
+    pT = 0.68 + smooth01((c - 0.44) / 0.21) * 0.32;
   }
   if (porsche) {
-    porsche.group.visible = celOverride !== 'deur';
-    const lichtAan = c < 0.68 ? 1.0 : Math.max(0, 1 - (c - 0.68) / 0.032);
+    porsche.group.visible = c >= 0.22;
+    const lichtAan = c < 0.22 ? 0.0 : (c < 0.645 ? 1.0 : Math.max(0, 1 - (c - 0.645) / 0.032));
     porsche.zetMotorLicht(lichtAan);
     porsche.zetIntroStand(Math.min(1, pT));
   }
 
-  // 2. Intercom, gezichtloze muurschaduw & aanbel-hand (Shot 3); halverlichting blijft UIT tot na het aanbellen!
-  let belDruk = 0, belRingT = 0, raamAan = 0, schaduwT = -1, reik = 0;
+  // 3. Intercom, muurschaduw, hand-cel & 3D-halschim (alleen halverlichting aan vanaf Shot 5 beat 1!)
+  let belDruk = 0, belRingT = 0, schaduwT = -1, reik = 0;
+  let halEff = 0, schimSterkte = 0;
+  if (c >= 0.68 && c < 0.84) {
+    schaduwT = Math.max(0, Math.min(1, (c - 0.68) / 0.15));
+    if (c >= 0.74 && c < 0.785) reik = smooth01((c - 0.74) / 0.045);
+    else if (c >= 0.785 && c < 0.81) reik = 1.0;
+    else if (c >= 0.81 && c < 0.838) reik = 1.0 - smooth01((c - 0.81) / 0.028);
+    belDruk = (c >= 0.785 && c < 0.81) ? smooth01(Math.sin(((c - 0.785) / 0.025) * Math.PI)) : 0;
+    belRingT = c >= 0.79 ? Math.min(1, (c - 0.79) / 0.035) : 0;
+    halEff = 0;
+  } else if (halBeat >= 0) {
+    // Shot 5 (3-beat in-world limited cel rechtstreeks op de 3D-haldeur!)
+    halEff = halBeat >= 1 ? 1.0 : 0.0;
+    schimSterkte = halBeat >= 2 ? 1.0 : 0.0;
+    if (halBeat >= 1) gangLichtAan = 1.0;
+  } else if (c >= 0.92) {
+    gangLichtAan = 1.0;
+    halEff = 1.0;
+    schimSterkte = Math.max(0, 1 - smooth01((c - 0.92) / 0.05));
+  }
+
+  LICHT.uGangLicht.value = halEff * LICHT.uBrandt.value;
   if (intercom && belHand) {
     const belWereld = intercom.belWereldPositie(tmpBelPos);
-    if (c >= 0.72 && c < 0.91) {
-      schaduwT = Math.max(0, Math.min(1, (c - 0.72) / 0.18));
-      if (c >= 0.79 && c < 0.84) reik = smooth01((c - 0.79) / 0.05);
-      else if (c >= 0.84 && c < 0.87) reik = 1.0;
-      else if (c >= 0.87 && c < 0.905) reik = 1.0 - smooth01((c - 0.87) / 0.035);
-      belDruk = (c >= 0.84 && c < 0.87) ? smooth01(Math.sin(((c - 0.84) / 0.03) * Math.PI)) : 0;
-      belRingT = c >= 0.845 ? Math.min(1, (c - 0.845) / 0.04) : 0;
-      // Pas in Shot 4 (limited cel Beat 1) klikt de halverlichting echt aan — hier blijft het spannend donker!
-      raamAan = 0;
-    } else if (c >= 0.91) {
-      raamAan = 1.0;
-      gangLichtAan = 1.0;
-    }
-    const halEff = c >= 0.91 ? Math.max(raamAan, gangLichtAan) : 0;
-    LICHT.uGangLicht.value = halEff * LICHT.uBrandt.value;
     belHand.zetReik(reik, belWereld);
     intercom.zetStaat(LICHT.uBrandt.value, belDruk, belRingT, halEff, schaduwT);
   }
+  if (halSchim) halSchim.zetStaat(schimSterkte * LICHT.uBrandt.value);
 
-  // 3. Strakke film-noir camera-regie (vaste statische shots!)
+  // 4. Film-noir camera-regie met voorgrond-framing (vaste shots + vloeiende eindbeweging)
   let bijschrift = '';
-  if (c < 0.44) {
-    // Shot 1: 100% VASTE camera op de straathoek met handwijzer, klinkerstraat & maan; de 911 zoeft vlot voorbij!
+  if (c < 0.22) {
+    // Shot 1: Hoog balkonshot over de kruising & klinkers (kijkend langs donkere boomkruinen richting Chapeau & Boekhandel)
+    const k = smooth01(c / 0.22);
+    camera.position.set(-28.0 + 1.2 * k, 6.2, 38.6 - 0.6 * k);
+    stuur.target.set(-7.5 + 1.8 * k, 2.0, 18.8 - 1.2 * k);
+    camera.fov = hoekVoorScherm(36);
+    if (c < 0.205) bijschrift = '22:14 · Blaricum. Er gaat een nieuwe naam rond in het dorp — maar nergens hangt een bord.';
+  } else if (c < 0.44) {
+    // Shot 2: 100% VASTE lage camera op de straathoek achter lantaarn & handwijzer; de 911 zoeft vlot over de klinkers!
     camera.position.set(-14.4, 2.35, 42.4);
     stuur.target.set(-13.8, 2.55, 16.5);
     camera.fov = hoekVoorScherm(38);
-    if (c < 0.41) bijschrift = '22:14 · Blaricum. Iemand in het dorp gaf je één adres — zonder bord aan de straat.';
-  } else if (c < 0.72) {
-    // Shot 2: Vaste lage camera op het donkere Monastic-erf (alleen het intercomlampje gloeit; ramen donker!)
-    camera.position.set(22.4, 2.15, 2.4);
-    stuur.target.set(11.6, 2.05, -0.8);
-    camera.fov = hoekVoorScherm(39);
-    if (c < 0.69) bijschrift = 'Achter de haag aan de Meentweg. Nieuw in het dorp — en alles lijkt donker.';
-  } else if (c < 0.91) {
-    // Shot 3: Vaste close-up op het MONASTIC-bordje, film-noir schaduw over de bakstenen & hand aan de bel
-    const k = smooth01((c - 0.72) / 0.19);
-    const afstand = 1.18 - 0.16 * k;
+    if (c < 0.415) bijschrift = 'Een paar minuten later draait een donkere 911 de stille kruising over.';
+  } else if (c < 0.68) {
+    // Shot 3: Voorgrond-framing langs de rechter garagemuur & donkere linker haag het donkere erf op!
+    camera.position.set(24.2, 1.85, -0.35);
+    stuur.target.set(11.1, 2.10, -0.55);
+    camera.fov = hoekVoorScherm(37);
+    if (c < 0.655) bijschrift = 'Achter de haag aan de Meentweg. Nieuw in het dorp — en alles lijkt donker.';
+  } else if (c < 0.84) {
+    // Shot 4: Strakke close-up op de bakstenen pier, gezichtloze hoed-schaduw & hand op MONASTIC
+    const k = smooth01((c - 0.68) / 0.16);
+    const afstand = 1.18 - 0.14 * k;
     camera.position.copy(INTERCOM_POS)
       .addScaledVector(INTERCOM_NORMAAL, afstand)
       .addScaledVector(MUUR_RECHTS, 0.04)
       .add(new THREE.Vector3(0, 0.02, 0));
     stuur.target.copy(INTERCOM_POS)
-      .addScaledVector(MUUR_RECHTS, 0.03)
-      .add(new THREE.Vector3(0, 0.0, 0));
-    camera.fov = hoekVoorScherm(33);
-  } else {
-    // Outro (0.91–1.00): camera zwaait vloeiend uit over het donkere erf met ALLEEN de halverlichting aan -> vrij 3D!
-    const k = smooth01((c - 0.91) / 0.09);
-    tmpUitOog.copy(INTERCOM_POS)
-      .addScaledVector(INTERCOM_NORMAAL, 1.02)
-      .addScaledVector(MUUR_RECHTS, 0.04)
-      .add(new THREE.Vector3(0, 0.02, 0));
-    tmpUitDoel.copy(INTERCOM_POS)
       .addScaledVector(MUUR_RECHTS, 0.03);
-    camera.position.lerpVectors(tmpUitOog, new THREE.Vector3(21.8, 2.65, 3.1), k);
-    stuur.target.lerpVectors(tmpUitDoel, new THREE.Vector3(11.2, 2.1, -0.8), k);
-    camera.fov = hoekVoorScherm(33 + 6 * k);
+    camera.fov = hoekVoorScherm(33);
+  } else if (c < 0.92) {
+    // Shot 5: Laag erfshot schuin langs de neus van de 911 pal op de ECHTE 3D-haldeur & visgraatklinkers (nul stijlbreuk!)
+    camera.position.set(14.5, 1.55, -3.05);
+    stuur.target.set(8.6, 1.85, -1.25);
+    camera.fov = hoekVoorScherm(38);
+  } else {
+    // Shot 6 (Outro 0.92–1.00): rustige terugtrekbeweging over het maanverlichte erf met brandende halverlichting -> vrij 3D!
+    const k = smooth01((c - 0.92) / 0.08);
+    tmpUitOog.set(14.5, 1.55, -3.05);
+    tmpUitDoel.set(8.6, 1.85, -1.25);
+    camera.position.lerpVectors(tmpUitOog, new THREE.Vector3(23.2, 2.25, 1.4), k);
+    stuur.target.lerpVectors(tmpUitDoel, new THREE.Vector3(11.0, 2.1, -0.7), k);
+    camera.fov = hoekVoorScherm(38 + 2 * k);
   }
 
-  const celStand = celOverride || 'uit';
-  zetRegieUI(!!intro, celStand, bijschrift, deurFrame);
+  zetRegieUI(!!intro, bijschrift);
   camera.updateProjectionMatrix();
-  const kop = celStand === 'deur' ? ['Monastic · Blaricum', deurFrame === 0 ? 'Even stilte achter de donkere hal-deur…' : deurFrame === 1 ? 'Klik — de halverlichting springt aan' : 'Een schim stapt achter het ruitjesglas'] :
-              c < 0.44 ? ['De kruising · 22:14', 'Een 911 zoeft over de stille Blaricumse klinkers'] :
-              c < 0.72 ? ['Het erf · Meentweg', 'Het kantoor ligt er donker bij'] :
-              c < 0.91 ? ['Monastic · Intercom', 'Een schaduw langs de muur… trrring'] :
+  const kop = c < 0.22 ? ['De kruising · 22:14', 'Een schim steekt over langs Bistrot Chapeau'] :
+              c < 0.44 ? ['Torenlaan · Klinkers', 'Een donkere 911 zoeft voorbij de handwijzer'] :
+              c < 0.68 ? ['Meentweg · Achter de haag', 'Het kantoor ligt er donker en stil bij'] :
+              c < 0.84 ? ['Monastic · Intercom', 'Een schaduw langs de muur… trrring'] :
+              c < 0.92 ? ['Monastic · De hal', halBeat === 0 ? 'Even stilte achter de donkere deur…' : halBeat === 1 ? 'Klik — alleen de halverlichting springt aan' : 'Een schim stapt achter het 3D-halraam'] :
                          ['Het erf · Monastic', 'Alleen de halverlichting brandt · sleep om rond te kijken'];
   werkCartoucheBij(kop[0], kop[1]);
 }
@@ -2240,66 +2252,66 @@ function werkInteractiefVerhaalBij(nu) {
   if (!intro) return;
   const elapsed = nu - intro.t0;
 
-  if (intro.fase === 'torenlaan') {
-    // Vlot & strak (3.0 s) terwijl de auto langs de vaste camera over de klinkers scheurt!
+  if (intro.fase === 'kruising') {
+    const f = Math.min(1, elapsed / 4200);
+    toonBallon('', '', '');
+    toonKeuzes('', null);
+    pasIntroFrameToe(f * 0.218);
+    if (f >= 1) { intro.fase = 'torenlaan'; intro.t0 = nu; }
+  } else if (intro.fase === 'torenlaan') {
     const f = Math.min(1, elapsed / 3000);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(f * 0.438);
+    pasIntroFrameToe(0.22 + f * 0.218);
     if (f >= 1) { intro.fase = 'oprit'; intro.t0 = nu; }
   } else if (intro.fase === 'oprit') {
-    const f = Math.min(1, elapsed / 3200);
+    const f = Math.min(1, elapsed / 3600);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(0.44 + f * 0.278);
+    pasIntroFrameToe(0.44 + f * 0.238);
     if (f >= 1) { intro.fase = 'aanbellen'; intro.t0 = nu; }
   } else if (intro.fase === 'aanbellen') {
-    const f = Math.min(1, elapsed / 3200);
+    const f = Math.min(1, elapsed / 3400);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(0.72 + f * 0.188);
-    if (f >= 1) {
-      intro.fase = 'deur';
-      intro.t0 = nu;
-    }
-  } else if (intro.fase === 'deur') {
-    // 3-beat pixel-gelockte limited cel animatie:
-    //   0.00–0.65 s: Frame 0 (donkere hal-deur, alleen koperen buitenlampje)
-    //   0.65–1.45 s: Frame 1 (KLIK! halverlichting springt warm goud aan — lege hal)
-    //   1.45 s+    : Frame 2 (SNAP! anonieme schim achter het glas reikt naar de klink!)
-    const beat = elapsed < 650 ? 0 : (elapsed < 1450 ? 1 : 2);
-    if (beat >= 1) {
-      gangLichtAan = 1.0;
-      LICHT.uGangLicht.value = LICHT.uBrandt.value;
-    }
-    pasIntroFrameToe(0.91, 'deur', beat);
+    pasIntroFrameToe(0.68 + f * 0.158);
+    if (f >= 1) { intro.fase = 'hal'; intro.t0 = nu; }
+  } else if (intro.fase === 'hal') {
+    // 3-beat in-world limited cel op het ECHTE 3D-pand (100% consistente tekenstijl!):
+    //   0.00–0.85 s: Beat 0 (stilte, donkere hal-deur)
+    //   0.85–1.65 s: Beat 1 (KLIK! alleen de 3D-halverlichting springt warm goud aan!)
+    //   1.65 s+    : Beat 2 (SNAP! anonieme 3D-schim achter het halraam + schaduw op de visgraat!)
+    const beat = elapsed < 850 ? 0 : (elapsed < 1650 ? 1 : 2);
+    pasIntroFrameToe(0.88, beat);
     if (beat === 0) {
       toonBallon('', '', '');
       toonKeuzes('', null);
     } else if (beat === 1) {
-      toonBallon('noir', 'Klik…', 'Binnen springt alleen de halverlichting aan.');
+      toonBallon('noir', 'Klik…', 'Alleen de halverlichting springt aan.');
       toonKeuzes('', null);
     } else {
-      toonBallon('noir', 'Monastic · Nieuw in Blaricum', '“Achter de haag aan de Meentweg. Websites en digitaal maatwerk — voor werk dat niet op de rest lijkt.”');
-      toonKeuzes('deur-noir', [
-        { label: '01 · Het erf', titel: 'Verken het dorp in 3D →', sub: 'Sleep & zoom over de klinkers en het donkere erf', actie: () => stapNaarOutro() },
+      toonBallon('noir', 'Monastic · Nieuw in Blaricum', '“Geen bord aan de straat. Wel websites en digitaal handwerk — op afspraak.”');
+      toonKeuzes('hal-noir', [
+        { label: '01 · Het erf', titel: 'Verken Blaricum in 3D →', sub: 'Sleep & zoom over de klinkers en het donkere erf', actie: () => stapNaarOutro() },
         { label: '02 · Websites', titel: 'Websites & vaste prijzen ↗', sub: 'Eigen ontwerp vanaf € 1.450 excl. btw', actie: () => { window.open('https://monastic.nl/websites/', '_blank', 'noopener'); stapNaarOutro(); } },
         { label: '03 · WordPress', titel: 'WordPress-check ↗', sub: 'Doorlichting met herstel (€ 249) of overstappen', actie: () => { window.open('https://monastic.nl/wordpress/', '_blank', 'noopener'); stapNaarOutro(); } },
       ]);
     }
   } else if (intro.fase === 'outro') {
-    const f = Math.min(1, elapsed / 1600);
+    const f = Math.min(1, elapsed / 1800);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(0.91 + f * 0.09, 'uit');
+    pasIntroFrameToe(0.92 + f * 0.08);
     if (f >= 1) {
       intro = null;
       gangLichtAan = 1.0;
       LICHT.uGangLicht.value = LICHT.uBrandt.value;
       standNaam = 'erf';
-      zetRegieUI(false, 'uit', '');
+      zetRegieUI(false, '');
       if (porsche) { porsche.group.visible = true; porsche.uitlaatGroep.visible = false; porsche.zetMotorLicht(0); }
       if (belHand) belHand.zetReik(0, null);
+      if (dorpSchim) dorpSchim.zetVoortgang(-1, false);
+      if (halSchim) halSchim.zetStaat(0);
       if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
       const knop = document.getElementById('intro-knop');
       if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
@@ -2316,11 +2328,12 @@ function startIntro() {
   gangLichtAan = 0;
   LICHT.uGangLicht.value = 0;
   if (porsche) {
-    porsche.group.visible = true;
-    porsche.zetMotorLicht(1);
+    porsche.group.visible = false;
+    porsche.zetMotorLicht(0);
   }
-  intro = { fase: 'torenlaan', t0: performance.now() };
-  zetRegieUI(true, 'uit', '22:14 · Blaricum. Iemand in het dorp gaf je één adres — zonder bord aan de straat.');
+  if (halSchim) halSchim.zetStaat(0);
+  intro = { fase: 'kruising', t0: performance.now() };
+  zetRegieUI(true, '22:14 · Blaricum. Er gaat een nieuwe naam rond in het dorp — maar nergens hangt een bord.');
   toonBallon('', '', '');
   toonKeuzes('', null);
   const knop = document.getElementById('intro-knop');
@@ -2500,11 +2513,15 @@ async function begin() {
   porsche = bouwPorscheLeven(gesplitst.porsche, rompMat, pRandMat, pLijnMat, gloed);
   scene.add(porsche.group, porsche.uitlaatGroep);
 
-  // De echte Monastic-intercom + wandlantaarn + film-noir muurschaduw én de 2D Kuifje-aanbelcel (hand-cel.webp)!
+  // De echte Monastic-intercom + wandlantaarn + film-noir muurschaduw + 3D-native schimmen (nul stijlbreuk!)
   intercom = bouwIntercom(gloed, lMat.uniforms.uRes, lMat.uniforms.uLijn);
   scene.add(intercom.group);
   belHand = bouwBelHandCel(LICHT.uNacht);
   scene.add(belHand.groep);
+  dorpSchim = bouwDorpSchim();
+  scene.add(dorpSchim.groep);
+  halSchim = bouwHalSchim();
+  scene.add(halSchim.groep);
 
   // Nachtwolken met rustige maanlichtrand (11 vaste platen hoog rondom het dorp) + fijne nachtsterren
   const plekken = [[-520, 190, -640, 300], [260, 250, -820, 380], [760, 170, -300, 260], [-820, 230, 180, 340], [520, 210, 640, 300], [-240, 260, 860, 360],
@@ -2532,15 +2549,15 @@ async function begin() {
   kringen.forEach((q, i) => LICHT.uLamp.value[i].set(q[0], q[1], q[2], q[3]));
   LICHT.uLampN.value = kringen.length;
 
-  // Volumetrische zachte lichtkegels onder elke straatlantaarn (zoals op de referentieplaat!)
-  lampKegelMat = maakLichtKegelMat(0xf7ea92, 0.16);
-  const straalGeo = new THREE.CylinderGeometry(0.18, 2.15, 3.6, 16, 1, true);
+  // Volumetrische zachte lichtkegels & rijke warme bloom-lichtkransen rond elke straatlantaarn
+  lampKegelMat = maakLichtKegelMat(0xf7ea92, 0.20);
+  const straalGeo = new THREE.CylinderGeometry(0.18, 2.25, 3.6, 16, 1, true);
   straalGeo.translate(0, -1.8, 0);
   for (const [x, y, z] of model.lampen || []) {
     const ly = y < 3.7 ? y - 0.18 : y;
     const l = new THREE.Sprite(new THREE.SpriteMaterial({ map: gloed, depthWrite: false, fog: false }));
     l.position.set(x, ly, z);
-    l.scale.set(2.3, 2.3, 1);
+    l.scale.set(3.4, 3.4, 1);
     l.renderOrder = 12;
     lampen.push(l);
     scene.add(l);
@@ -2571,6 +2588,12 @@ async function begin() {
   new ResizeObserver(maat).observe(doek);
   for (const k of document.querySelectorAll('[data-stand]')) k.addEventListener('click', () => naar(k.dataset.stand));
   for (const k of document.querySelectorAll('[data-tijd]')) k.addEventListener('click', () => zetTijd(k.dataset.tijd));
+  const zetSfeer = (s) => {
+    if (kaderEl) kaderEl.dataset.sfeer = s;
+    for (const b of document.querySelectorAll('[data-sfeer]')) b.setAttribute('aria-pressed', String(b.dataset.sfeer === s));
+  };
+  for (const k of document.querySelectorAll('[data-sfeer]')) k.addEventListener('click', () => zetSfeer(k.dataset.sfeer));
+  if (vraag.has('sfeer')) zetSfeer(vraag.get('sfeer'));
   const introKnop = document.getElementById('intro-knop');
   if (introKnop) introKnop.addEventListener('click', startIntro);
   if (overslaanKnop) overslaanKnop.addEventListener('click', slaIntroOver);
@@ -2578,12 +2601,12 @@ async function begin() {
   if (rondKnop) rondKnop.addEventListener('click', startRondleiding);
   stuur.addEventListener('start', () => { reis = null; stopRondleiding(); });
 
-  // Sneltoetsen: 1-3 kiezen het vervolg bij de deur, anders 1-7 voor standpunten, I voor de openingsscène, Esc overslaan.
+  // Sneltoetsen: 1-3 kiezen het vervolg bij de hal, anders 1-7 voor standpunten, I voor de openingsscène, Esc overslaan.
   const standLijst = ['hoekpand', 'kruising', 'wijzer', 'erf', 'straat', 'plein', 'dorp'];
   window.addEventListener('keydown', (ev) => {
     if (ev.target && /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.key === 'Escape' && intro) { slaIntroOver(); return; }
-    if (intro && intro.fase === 'deur' && ev.key >= '1' && ev.key <= '3') {
+    if (intro && intro.fase === 'hal' && ev.key >= '1' && ev.key <= '3') {
       const fn = actieveKeuzeActies[Number(ev.key) - 1];
       if (fn) { ev.preventDefault(); fn(); return; }
     }
@@ -2592,7 +2615,7 @@ async function begin() {
     else if (ev.code === 'Space') { ev.preventDefault(); startRondleiding(); }
   });
 
-  // Speel de korte film-noir openingsscène direct af bij openen (tenzij een vaste stand of ?afdruk is gevraagd).
+  // Speel de film-noir openingsscène direct af bij openen (tenzij een vaste stand of ?afdruk is gevraagd).
   if (!isAfdruk && !vraag.has('stand') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     startIntro();
   } else if (vraag.has('intro')) {
@@ -2615,6 +2638,8 @@ async function begin() {
     LICHT.uGangLicht.value = LICHT.uBrandt.value;
     if (porsche) { porsche.group.visible = true; porsche.uitlaatGroep.visible = false; porsche.zetIntroStand(1.0); porsche.zetMotorLicht(0); }
     if (belHand) belHand.zetReik(0, null);
+    if (dorpSchim) dorpSchim.zetVoortgang(-1, false);
+    if (halSchim) halSchim.zetStaat(0);
     if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
     if (vogels) vogels.update(0);
     renderNu();

@@ -106,68 +106,61 @@ body {
 }
 .cartouche[hidden] { display: none; }
 
-/* 2D Kuifje-tekenfilmcel (Shot 2: in de Porsche) vóór het live bewegende 3D Blaricum */
 .kader.in-regie #doek { cursor: default; }
-.cel-laag {
+
+/* Live Sfeer-overlays over het 3D-canvas:
+   - data-sfeer="noir"  (A): 35mm film-noir korrel, vignet & petrol/amber contrast
+   - data-sfeer="album" (B): warm gedrukt stripalbum met papiervezel, subtiel schaduwraster & zwart kader */
+.sfeer-laag {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   overflow: hidden;
 }
-.cel-laag[hidden] { display: none; }
-.cel-glans {
+.sfeer-laag::before,
+.sfeer-laag::after {
+  content: "";
   position: absolute;
-  inset: -10% -40%;
-  background: linear-gradient(108deg,
-    transparent 0%, transparent 43%,
-    rgba(248, 234, 168, 0.14) 47%, rgba(248, 234, 168, 0.04) 51%,
-    transparent 55%, transparent 100%);
-  animation: celLampVeeg 3.4s ease-in-out infinite;
-}
-.cel-porsche {
-  position: absolute;
-  left: -1.5%;
-  top: -1.5%;
-  width: 103%;
-  height: 103%;
-  object-fit: cover;
-  object-position: 50% 58%;
-  animation: celVering 0.68s ease-in-out infinite;
-  will-change: transform;
-}
-@keyframes celVering {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  50% { transform: translate3d(0, 2px, 0); }
-}
-@keyframes celLampVeeg {
-  0% { transform: translateX(48%); opacity: 0; }
-  22% { opacity: 1; }
-  78% { opacity: 1; }
-  100% { transform: translateX(-48%); opacity: 0; }
+  inset: 0;
+  pointer-events: none;
 }
 
-/* 2D Ligne Claire limited cel (3 pixel-gelockte frames: donker -> halverlichting -> schim achter glas) */
-.cel-deur-laag {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  overflow: hidden;
-  background: #0e1923;
-  animation: celFadeIn 220ms ease-out;
+/* Preset A: 35mm Film-noir korrel + vignet */
+.kader[data-sfeer="noir"] #doek {
+  filter: contrast(1.13) saturate(0.88);
 }
-.cel-deur-laag[hidden] { display: none; }
-.cel-deur {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 50% 48%;
-  display: block;
+.kader[data-sfeer="noir"] .sfeer-laag::before {
+  background: radial-gradient(ellipse at 50% 48%, transparent 44%, rgba(4, 10, 18, 0.56) 100%);
 }
-.cel-deur[hidden] { display: none; }
+.kader[data-sfeer="noir"] .sfeer-laag::after {
+  opacity: 0.24;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* Preset B: Gedrukt Belgisch stripalbum (warm papier + subtiel raster + stripkader) */
+.kader[data-sfeer="album"] #doek {
+  filter: contrast(1.07) sepia(0.08);
+}
+.kader[data-sfeer="album"] .sfeer-laag::before {
+  background:
+    radial-gradient(ellipse at 50% 48%, transparent 56%, rgba(16, 18, 22, 0.34) 100%),
+    radial-gradient(rgba(10, 14, 20, 0.14) 0.75px, transparent 0.75px);
+  background-size: 100% 100%, 4px 4px;
+  box-shadow: inset 0 0 0 3px #070a0d, inset 0 0 0 9px rgba(243, 237, 224, 0.92), inset 0 0 0 11px #070a0d;
+}
+.kader[data-sfeer="album"] .sfeer-laag::after {
+  opacity: 0.26;
+  mix-blend-mode: multiply;
+  background-color: #f3ead4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+}
+
+.kader[data-sfeer="uit"] .sfeer-laag { display: none; }
+
 @keyframes celFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

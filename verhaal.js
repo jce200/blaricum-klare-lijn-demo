@@ -546,3 +546,248 @@ export function bouwErfDetails() {
     },
   };
 }
+
+// ---- 5. Anonieme film-noir schim die in Shot 1 over de Blaricumse klinkers bij Bistrot Chapeau loopt (4-frame limited cel, geen gezicht!)
+function tekenLoopSchimFrame(fase) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 512;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 512);
+  // 4 discrete loopfases (stride) met klassieke trenchcoat & gedeukte gleufhoed in zijprofiel naar rechts
+  const pas = [
+    { b1: -34, b2: 30, arm: 18, bob: 0, jas: -14 },
+    { b1: -10, b2: 8,  arm: 6,  bob: -6, jas: -6 },
+    { b1: 30,  b2: -32, arm: -16, bob: 0, jas: -16 },
+    { b1: 8,   b2: -8,  arm: -5, bob: -6, jas: -8 },
+  ][fase % 4];
+  const y0 = 24 + pas.bob;
+
+  g.fillStyle = '#070b10';
+  g.strokeStyle = '#020406';
+  g.lineWidth = 4;
+  g.lineJoin = 'round';
+
+  // Achterste been + schoen
+  g.beginPath();
+  g.moveTo(118, y0 + 305);
+  g.lineTo(116 + pas.b2 * 0.65, y0 + 392);
+  g.lineTo(118 + pas.b2, y0 + 462);
+  g.lineTo(148 + pas.b2, y0 + 468);
+  g.lineTo(148 + pas.b2, y0 + 476);
+  g.lineTo(106 + pas.b2, y0 + 476);
+  g.lineTo(98 + pas.b2 * 0.55, y0 + 390);
+  g.lineTo(96, y0 + 305);
+  g.closePath();
+  g.fill();
+
+  // Voorste been + schoen
+  g.beginPath();
+  g.moveTo(132, y0 + 305);
+  g.lineTo(136 + pas.b1 * 0.65, y0 + 392);
+  g.lineTo(132 + pas.b1, y0 + 462);
+  g.lineTo(164 + pas.b1, y0 + 468);
+  g.lineTo(164 + pas.b1, y0 + 476);
+  g.lineTo(118 + pas.b1, y0 + 476);
+  g.lineTo(116 + pas.b1 * 0.55, y0 + 390);
+  g.lineTo(112, y0 + 305);
+  g.closePath();
+  g.fill();
+
+  // Lange, licht wapperende trenchcoat + schouders + opstaande kraag + gleufhoed (kijkend naar rechts)
+  g.beginPath();
+  // Gleufhoed
+  g.moveTo(92, y0 + 72);
+  g.quadraticCurveTo(106, y0 + 62, 118, y0 + 60);
+  g.lineTo(124, y0 + 34);
+  g.quadraticCurveTo(144, y0 + 26, 162, y0 + 36);
+  g.lineTo(168, y0 + 58);
+  g.quadraticCurveTo(192, y0 + 60, 202, y0 + 70); // voorrand hoed
+  g.quadraticCurveTo(182, y0 + 78, 166, y0 + 78);
+  // Gezichtloos profiel (alleen donkere schim onder hoedrand)
+  g.lineTo(164, y0 + 104);
+  g.lineTo(154, y0 + 114);
+  // Opstaande trenchcoatkraag voor + borst
+  g.lineTo(170, y0 + 124);
+  g.quadraticCurveTo(176, y0 + 178, 166, y0 + 245);
+  g.lineTo(176 + pas.b1 * 0.35, y0 + 348); // voorpand jas
+  g.lineTo(82 + pas.jas, y0 + 356);        // wapperende achterkant jas
+  g.quadraticCurveTo(84, y0 + 245, 92, y0 + 150);
+  g.lineTo(108, y0 + 122);
+  g.lineTo(112, y0 + 104);
+  g.quadraticCurveTo(104, y0 + 88, 108, y0 + 76);
+  g.closePath();
+  g.fill();
+
+  // Zwaaiende mouw/arm met aktekoffer-silhouet (geeft direct "mysterieuze gast" gevoel!)
+  const hx = 132 + pas.arm, hy = y0 + 258;
+  g.beginPath();
+  g.moveTo(124, y0 + 154);
+  g.lineTo(hx + 10, hy);
+  g.lineTo(hx - 10, hy + 4);
+  g.lineTo(108, y0 + 160);
+  g.closePath();
+  g.fill();
+  // Subtiele slanke aktetas aan de hand
+  g.fillRect(hx - 18, hy + 2, 42, 30);
+
+  // Zeer subtiele petrol-blauw maanlicht-rand langs rug & hoedkroon (bindt de schim 100% in het 3D-nachtpalet!)
+  g.strokeStyle = 'rgba(104, 146, 174, 0.42)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(124, y0 + 35);
+  g.quadraticCurveTo(144, y0 + 28, 162, y0 + 37);
+  g.moveTo(92, y0 + 152);
+  g.quadraticCurveTo(84, y0 + 245, 83 + pas.jas, y0 + 354);
+  g.stroke();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+export function bouwDorpSchim() {
+  const groep = new THREE.Group();
+  const frames = [0, 1, 2, 3].map(tekenLoopSchimFrame);
+  const mat = new THREE.MeshBasicMaterial({
+    map: frames[0],
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const figuur = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.88), mat);
+  figuur.position.y = 0.94;
+  figuur.renderOrder = 11;
+  groep.add(figuur);
+
+  // Lange, scherpe film-noir slagschaduw op de klinkers onder de schim
+  const schCv = document.createElement('canvas');
+  schCv.width = 128; schCv.height = 128;
+  const sg = schCv.getContext('2d');
+  sg.fillStyle = 'rgba(6, 10, 15, 0.72)';
+  sg.beginPath();
+  sg.ellipse(64, 64, 52, 20, -0.25, 0, Math.PI * 2);
+  sg.fill();
+  const schTex = new THREE.CanvasTexture(schCv);
+  const schaduw = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.3, 1.15),
+    new THREE.MeshBasicMaterial({ map: schTex, transparent: true, depthWrite: false }),
+  );
+  schaduw.rotation.x = -Math.PI / 2;
+  schaduw.position.set(0.45, 0.04, 0.35);
+  schaduw.renderOrder = 5;
+  groep.add(schaduw);
+
+  const start = new THREE.Vector3(-13.8, 0.03, 27.8);
+  const eind = new THREE.Vector3(-2.6, 0.03, 18.8);
+  // Richt de schim dwars op het balkonshot (-28, 6.2, 38.6) zodat hij breed in zijprofiel over de klinkers loopt!
+  figuur.rotation.y = -0.62;
+  groep.visible = false;
+
+  return {
+    groep,
+    zetVoortgang(t, zichtbaar = true) {
+      if (!zichtbaar || t < 0 || t > 1) {
+        groep.visible = false;
+        return;
+      }
+      groep.visible = true;
+      groep.position.lerpVectors(start, eind, t);
+      const idx = Math.floor(t * 16) % 4;
+      if (mat.map !== frames[idx]) {
+        mat.map = frames[idx];
+        mat.needsUpdate = true;
+      }
+    },
+  };
+}
+
+// ---- 6. Anonieme schim rechtstreeks achter het echte 3D-halraam van Monastic + slagschaduw op de gouden lichtwig!
+//         Levensechte menselijke schaal (schouders & profiel vullen het smalle halraam), 100% dezelfde 3D-stijl!
+export function bouwHalSchim() {
+  const groep = new THREE.Group();
+  groep.position.copy(INTERCOM_POS);
+  groep.rotation.y = INTERCOM_YAW;
+
+  // Levensecht profiel-silhouet (schouders + kraag + hoofd in lichte draai richting de voordeur) op ware schaal in 38x70 cm raam!
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 512;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 512);
+  g.fillStyle = '#0c121a';
+  g.beginPath();
+  // Rechter/achter-schouder loopt realistisch tot buiten het raamkozijn
+  g.moveTo(-10, 512);
+  g.lineTo(-10, 318);
+  g.quadraticCurveTo(22, 266, 74, 248);    // linkerschouder / jas
+  g.lineTo(82, 224);                        // opstaande kraag achter
+  g.quadraticCurveTo(72, 182, 78, 140);     // achterhoofd
+  g.quadraticCurveTo(88, 86, 134, 84);      // kruin
+  g.quadraticCurveTo(176, 86, 184, 132);    // voorhoofd (licht naar rechts / deur gedraaid)
+  g.lineTo(192, 152);                       // neuslijn (subtiel, geen gezichtsdetails)
+  g.lineTo(183, 166);
+  g.lineTo(185, 192);                       // kaak/kin
+  g.lineTo(164, 208);                       // hals
+  g.lineTo(176, 226);                       // kraag voor
+  g.quadraticCurveTo(226, 252, 256, 304);   // rechterschouder richting deur
+  g.lineTo(266, 512);
+  g.closePath();
+  g.fill();
+
+  const schimTex = new THREE.CanvasTexture(c);
+  schimTex.colorSpace = THREE.SRGBColorSpace;
+  const schimMat = new THREE.MeshBasicMaterial({
+    map: schimTex,
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  // Geplaatst pal in het smalle oplichtende halraampje (zodat hij haarscherp achter het glas aftekent!)
+  const raamSchim = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.70), schimMat);
+  raamSchim.position.set(-0.538, -0.02, -0.072);
+  raamSchim.renderOrder = 9;
+  groep.add(raamSchim);
+
+  // Lange, scherpe film-noir silhouet-schaduw op de 45° visgraatklinkers in de gouden lichtwig!
+  const vloerCv = document.createElement('canvas');
+  vloerCv.width = 256; vloerCv.height = 512;
+  const vg = vloerCv.getContext('2d');
+  vg.clearRect(0, 0, 256, 512);
+  vg.fillStyle = 'rgba(8, 12, 18, 0.72)';
+  vg.beginPath();
+  vg.moveTo(86, 0);
+  vg.lineTo(170, 0);
+  vg.lineTo(194, 260);
+  vg.quadraticCurveTo(180, 340, 152, 368);
+  vg.arc(128, 415, 36, -0.4, Math.PI + 0.4);
+  vg.quadraticCurveTo(76, 340, 62, 260);
+  vg.closePath();
+  vg.fill();
+  const vloerTex = new THREE.CanvasTexture(vloerCv);
+  const vloerMat = new THREE.MeshBasicMaterial({
+    map: vloerTex,
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+  });
+  const vloerSchaduw = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), vloerMat);
+  vloerSchaduw.rotation.x = -Math.PI / 2;
+  vloerSchaduw.position.set(0.32, -1.41, 1.25);
+  vloerSchaduw.renderOrder = 6;
+  groep.add(vloerSchaduw);
+
+  groep.visible = false;
+
+  return {
+    groep,
+    zetStaat(sterkte) {
+      const s = Math.max(0, Math.min(1, sterkte));
+      groep.visible = s > 0.02;
+      schimMat.opacity = s * 0.90;
+      vloerMat.opacity = s * 0.74;
+      raamSchim.position.x = -0.538 + (1 - s) * 0.08;
+    },
+  };
+}
+

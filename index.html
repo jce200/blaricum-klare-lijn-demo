@@ -26,18 +26,19 @@
       <button type="button" data-tijd="nacht" aria-pressed="true">Nacht</button>
       <button type="button" data-tijd="dag" aria-pressed="false">Dag</button>
     </nav>
+    <nav class="keuze" aria-label="Sfeer">
+      <button type="button" data-sfeer="noir" aria-pressed="true">Noir (A)</button>
+      <button type="button" data-sfeer="album" aria-pressed="false">Album (B)</button>
+      <button type="button" data-sfeer="uit" aria-pressed="false">Kaal</button>
+    </nav>
     <div class="keuze" aria-label="Animatie">
       <button type="button" id="intro-knop" class="actie" aria-pressed="false">Intro</button>
       <button type="button" id="rondleiding" class="actie" aria-pressed="false">Rondleiding</button>
     </div>
   </header>
-  <main class="kader">
+  <main class="kader" data-sfeer="noir">
     <canvas id="doek"></canvas>
-    <div class="cel-deur-laag" id="cel-deur-laag" hidden aria-hidden="true">
-      <img class="cel-deur" id="cel-deur-0" src="cels/schim-cel-0.webp" alt="">
-      <img class="cel-deur" id="cel-deur-1" src="cels/schim-cel-1.webp" alt="" hidden>
-      <img class="cel-deur" id="cel-deur-2" src="cels/schim-cel-2.webp" alt="" hidden>
-    </div>
+    <div class="sfeer-laag" id="sfeer-laag" aria-hidden="true"></div>
     <p class="strip-bijschrift" id="strip-bijschrift" hidden>22:14 · Blaricum.</p>
     <div class="strip-ballon" id="strip-ballon" hidden role="status" aria-live="polite">
       <span class="ballon-spreker" id="ballon-spreker"></span>
