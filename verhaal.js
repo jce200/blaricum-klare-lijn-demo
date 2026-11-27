@@ -378,3 +378,180 @@ export function bouwBelHandCel(uNacht) {
     },
   };
 }
+
+// ---- 3. Authentieke Blaricumsche Boekhandel-borden (warme oranje/oker bovenlichtpanelen met witte letters, exact als op de echte foto!)
+export function bouwBoekhandelBorden() {
+  const groep = new THREE.Group();
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 192;
+  const g = c.getContext('2d');
+  // Warm oranje-oker bovenlichtpaneel + strakke zwarte inktomranding
+  g.fillStyle = '#c97128';
+  g.fillRect(0, 0, 1024, 192);
+  g.strokeStyle = '#070a0d';
+  g.lineWidth = 14;
+  g.strokeRect(7, 7, 1010, 178);
+  g.fillStyle = '#fbf5e8';
+  g.font = '700 56px "Futura PT", "Century Gothic", "Trebuchet MS", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('BLARICUMSCHE BOEKHANDEL', 512, 100);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.FrontSide });
+
+  // Exact gemeten afwisselende winkelraam-vakken (y = 2.61..3.14 m) op Meentweg-gevel en Torenlaan-gevel!
+  const borden = [
+    // Meentweg-gevel (n = +0.55, +0.84 -> vak 2 en vak 4, exact als op de foto!)
+    { cx: -1.76, cz: 16.12, nx: 0.548, nz: 0.836, b: 2.68 },
+    { cx: 3.16, cz: 12.90, nx: 0.548, nz: 0.836, b: 2.68 },
+    // Torenlaan-gevel (n = -0.84, +0.55 -> boven de entree en etalage)
+    { cx: -7.39, cz: 15.44, nx: -0.836, nz: 0.548, b: 2.24 },
+    { cx: -10.10, cz: 11.30, nx: -0.836, nz: 0.548, b: 2.24 },
+  ];
+  for (const bd of borden) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(bd.b, 0.53), mat);
+    m.position.set(bd.cx + bd.nx * 0.048, 2.88, bd.cz + bd.nz * 0.048);
+    m.rotation.y = Math.atan2(bd.nx, bd.nz);
+    m.renderOrder = 6;
+    groep.add(m);
+  }
+
+  return {
+    groep,
+    zetNacht(nacht) {
+      // Overdag fris oranje-oker, 's avonds warm ingetogen terracotta (via setHex/lerp in sRGB-gecorrigeerde ruimte!)
+      const cDag = new THREE.Color(0xffffff);
+      const cNacht = new THREE.Color(0xc8a484);
+      mat.color.copy(cDag).lerp(cNacht, nacht);
+    },
+  };
+}
+
+// ---- 4. Handgetekende Ligne Claire erfaankleding bij het kantoor (uit de 4-luik collage: buxusstruikjes, brievenbus, fiets & kliko!)
+export function bouwErfDetails() {
+  const groep = new THREE.Group();
+  const inkt = new THREE.LineBasicMaterial({ color: 0x05070a });
+  const maakDoos = (w, h, d, mat) => metInkt(new THREE.BoxGeometry(w, h, d), mat, inkt);
+
+  const groen1Mat = new THREE.MeshBasicMaterial({ color: 0x263f2d });
+  const groen2Mat = new THREE.MeshBasicMaterial({ color: 0x1d3223 });
+  const klikoMat = new THREE.MeshBasicMaterial({ color: 0x2a333c });
+  const klikoDekselMat = new THREE.MeshBasicMaterial({ color: 0x181e24 });
+  const busMat = new THREE.MeshBasicMaterial({ color: 0x2e3740 });
+  const fietsMat = new THREE.MeshBasicMaterial({ color: 0x11161c });
+  const velgMat = new THREE.MeshBasicMaterial({ color: 0x6f7c88 });
+  const warmGlasMat = new THREE.MeshBasicMaterial({ color: 0xefc058, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide });
+
+  // 1. Warme bovenlicht-gloed over de volledige 4 bovenruitjes van Monastic's openslaande erfdeuren (renderOrder 4 -> zwarte kozijnlijnen tekenen er scherp overheen!)
+  const bovenPaneel = new THREE.Mesh(new THREE.PlaneGeometry(2.54, 0.56), warmGlasMat);
+  bovenPaneel.position.set(9.475 + INTERCOM_NORMAAL.x * 0.015, 2.48, 0.77 + INTERCOM_NORMAAL.z * 0.015);
+  bovenPaneel.rotation.y = INTERCOM_YAW;
+  bovenPaneel.renderOrder = 4;
+  groep.add(bovenPaneel);
+
+  // 2. Lage donkergroene buxusstruikjes langs de bakstenen plint bij het erf (zoals in paneel 3 van de collage!)
+  const struikPlekken = [
+    [9.25, 0.23, -2.55, 0.32, 0.24],
+    [9.58, 0.19, -2.95, 0.26, 0.20],
+    [10.85, 0.21, 2.25, 0.34, 0.23],
+    [11.20, 0.18, 2.72, 0.26, 0.20],
+  ];
+  for (let i = 0; i < struikPlekken.length; i++) {
+    const [sx, sy, sz, sr, sh] = struikPlekken[i];
+    const g = new THREE.Group();
+    const s1 = metInkt(new THREE.DodecahedronGeometry(sr, 0), i % 2 === 0 ? groen1Mat : groen2Mat, inkt);
+    s1.scale.set(1.15, sh / sr, 1.05);
+    g.add(s1);
+    const s2 = metInkt(new THREE.DodecahedronGeometry(sr * 0.72, 0), groen2Mat, inkt);
+    s2.position.set(sr * 0.55, -0.04, sr * 0.25);
+    s2.scale.set(1.1, (sh / sr) * 0.9, 1.0);
+    g.add(s2);
+    g.position.set(sx, sy, sz);
+    groep.add(g);
+  }
+
+  // 3. Klassieke donkergrijze brievenbus op paaltje links van de achterdeur (paneel 3 van de collage!)
+  const busG = new THREE.Group();
+  const paal = maakDoos(0.06, 1.05, 0.06, klikoDekselMat);
+  paal.position.set(0, 0.525, 0);
+  const kast = maakDoos(0.28, 0.38, 0.18, busMat);
+  kast.position.set(0, 1.12, 0);
+  const klep = maakDoos(0.30, 0.04, 0.20, klikoDekselMat);
+  klep.position.set(0, 1.32, 0);
+  busG.add(paal, kast, klep);
+  busG.position.set(9.18, 0.085, 1.98);
+  busG.rotation.y = INTERCOM_YAW;
+  groep.add(busG);
+
+  // 4. Nederlandse antraciet kliko netjes weggestopt tegen de linker bakstenen zijgevel (nooit midden op de oprit!)
+  const klikoG = new THREE.Group();
+  const bak = maakDoos(0.54, 0.92, 0.62, klikoMat);
+  bak.position.set(0, 0.52, 0);
+  const deksel = maakDoos(0.58, 0.08, 0.66, klikoDekselMat);
+  deksel.position.set(0, 1.01, 0);
+  const greep = maakDoos(0.52, 0.04, 0.06, fietsMat);
+  greep.position.set(0, 1.02, -0.35);
+  for (const wx of [-0.26, 0.26]) {
+    const w = metInkt(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 12), fietsMat, inkt);
+    w.rotation.z = Math.PI / 2;
+    w.position.set(wx, 0.09, -0.25);
+    klikoG.add(w);
+  }
+  klikoG.add(bak, deksel, greep);
+  klikoG.position.set(12.25, 0.085, 4.92);
+  klikoG.rotation.y = INTERCOM_YAW;
+  groep.add(klikoG);
+
+  // 5. Klassieke zwarte Nederlandse stadsfiets schuin tegen de rechter garagewand (paneel 1 van de collage!)
+  const fietsG = new THREE.Group();
+  for (const wz of [-0.52, 0.52]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.028, 8, 20), fietsMat);
+    band.rotation.y = Math.PI / 2;
+    band.position.set(0, 0.34, wz);
+    const velg = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.014, 6, 18), velgMat);
+    velg.rotation.y = Math.PI / 2;
+    velg.position.set(0, 0.34, wz);
+    fietsG.add(band, velg);
+  }
+  const buis = (a, b, r = 0.017) => {
+    const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b);
+    const len = va.distanceTo(vb);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), fietsMat);
+    m.position.copy(va).add(vb).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize());
+    return m;
+  };
+  fietsG.add(
+    buis([0, 0.34, -0.52], [0, 0.72, -0.14]), // achtervork boven
+    buis([0, 0.34, -0.52], [0, 0.32, -0.06]), // achtervork onder
+    buis([0, 0.32, -0.06], [0, 0.78, -0.16]), // zitbuis
+    buis([0, 0.32, -0.06], [0, 0.72, 0.36]),  // onderbuis
+    buis([0, 0.72, -0.14], [0, 0.76, 0.36]),  // bovenbuis
+    buis([0, 0.34, 0.52], [0, 0.94, 0.33]),   // voorvork & stuurpen
+    buis([-0.24, 0.94, 0.28], [0.24, 0.94, 0.28], 0.015), // stuur
+  );
+  const zadel = maakDoos(0.11, 0.045, 0.22, fietsMat);
+  zadel.position.set(0, 0.82, -0.18);
+  fietsG.add(zadel);
+  fietsG.position.set(14.55, 0.085, -3.55);
+  fietsG.rotation.set(0, 1.42, -0.11); // schuin leunend tegen de bakstenen garagewand
+  groep.add(fietsG);
+
+  const g1Dag = new THREE.Color(0x3a5a40), g1Nacht = new THREE.Color(0x1b2e22);
+  const g2Dag = new THREE.Color(0x2d4832), g2Nacht = new THREE.Color(0x14231a);
+  const klDag = new THREE.Color(0x454e56), klNacht = new THREE.Color(0x242c34);
+
+  return {
+    groep,
+    zetNacht(nacht) {
+      bovenPaneel.visible = nacht > 0.2;
+      warmGlasMat.opacity = 0.78 * nacht;
+      groen1Mat.color.copy(g1Dag).lerp(g1Nacht, nacht);
+      groen2Mat.color.copy(g2Dag).lerp(g2Nacht, nacht);
+      klikoMat.color.copy(klDag).lerp(klNacht, nacht);
+    },
+  };
+}
