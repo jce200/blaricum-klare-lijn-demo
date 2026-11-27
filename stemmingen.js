@@ -13,10 +13,10 @@
 export const STEMMINGEN = {
   // Rijke Kuifje/Klare Lijn-nacht: diep petrol-middernachtblauw, stevig stripschaduw-contrast en warm goudgeel licht!
   nacht: {
-    naam: 'Nacht', zon: [42, 38], licht: [1.0, 1.0, 1.0], schaduw: [0.64, 0.70, 0.80],
-    lucht: { laag: '#1d3c52', midden: '#163044', hoog: '#0f2334', band: [0.05, 0.18], wolk: 0.0 },
-    nevel: { kleur: '#152d40', van: 175, tot: 580, max: 0.28 }, brandt: true, wolken: true, nacht: true,
-    lamplicht: '#f2db84', plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
+    naam: 'Nacht', zon: [218, 36], licht: [1.0, 1.0, 1.0], schaduw: [0.56, 0.63, 0.76],
+    lucht: { laag: '#1a364b', midden: '#132a3d', hoog: '#0c1d2c', band: [0.05, 0.18], wolk: 0.0 },
+    nevel: { kleur: '#122738', van: 170, tot: 560, max: 0.30 }, brandt: true, wolken: true, nacht: true,
+    lamplicht: '#f4de88', plassen: 0.0, regen: 0.0, klare: 1.0, bunker: 1.0,
   },
   // Dezelfde zuivere Klare Lijn bij daglicht: vlak lichtblauw, géén waas, heldere slagschaduw.
   dag: {

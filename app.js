@@ -2134,14 +2134,14 @@ function pasIntroFrameToe(tNorm, halBeat = -1) {
     else dorpSchim.zetVoortgang(-1, false);
   }
 
-  // 2. Porsche-tempo: pas vanaf Shot 2 in beeld (0.22..0.44 langs de vaste straathoek; 0.44..0.68 het donkere erf op)
+  // 2. Porsche-tempo: vanaf Shot 2 rakelings langs de lage grondcamera (pT 0.08..0.56); in Shot 3 van achter de boom de oprit in (0.58..1.00)
   let pT = 1.0;
   if (c < 0.22) {
     pT = 0.0;
   } else if (c < 0.44) {
-    pT = 0.05 + ((c - 0.22) / 0.22) * 0.47;
+    pT = 0.08 + ((c - 0.22) / 0.22) * 0.48;
   } else if (c < 0.68) {
-    pT = 0.68 + smooth01((c - 0.44) / 0.21) * 0.32;
+    pT = 0.58 + smooth01((c - 0.44) / 0.21) * 0.42;
   }
   if (porsche) {
     porsche.group.visible = c >= 0.22;
@@ -2180,27 +2180,36 @@ function pasIntroFrameToe(tNorm, halBeat = -1) {
   }
   if (halSchim) halSchim.zetStaat(schimSterkte * LICHT.uBrandt.value);
 
-  // 4. Film-noir camera-regie met voorgrond-framing (vaste shots + vloeiende eindbeweging)
+  // 4. Film-noir camera-regie met originele lage & achter-de-boom standpunten
   let bijschrift = '';
   if (c < 0.22) {
-    // Shot 1: Hoog balkonshot over de kruising & klinkers (kijkend langs donkere boomkruinen richting Chapeau & Boekhandel)
-    const k = smooth01(c / 0.22);
-    camera.position.set(-28.0 + 1.2 * k, 6.2, 38.6 - 0.6 * k);
-    stuur.target.set(-7.5 + 1.8 * k, 2.0, 18.8 - 1.2 * k);
-    camera.fov = hoekVoorScherm(36);
+    // Shot 1: Start hoog boven de kruising (schim steekt over) en duikt daarna vloeiend omlaag tot VLAKBIJ DE GROND!
+    const f = c / 0.22;
+    const duik = f < 0.50 ? 0.0 : smooth01((f - 0.50) / 0.50);
+    camera.position.set(
+      -28.0 + (-14.6 - (-28.0)) * duik,
+      6.2 + (0.44 - 6.2) * duik,
+      38.6 + (34.8 - 38.6) * duik,
+    );
+    stuur.target.set(
+      -7.5 + (-15.5 - (-7.5)) * duik,
+      2.0 + (1.05 - 2.0) * duik,
+      18.8 + (25.0 - 18.8) * duik,
+    );
+    camera.fov = hoekVoorScherm(36 + 8 * duik);
     if (c < 0.205) bijschrift = '22:14 · Blaricum. Er gaat een nieuwe naam rond in het dorp — maar nergens hangt een bord.';
   } else if (c < 0.44) {
-    // Shot 2: 100% VASTE lage camera op de straathoek achter lantaarn & handwijzer; de 911 zoeft vlot over de klinkers!
-    camera.position.set(-14.4, 2.35, 42.4);
-    stuur.target.set(-13.8, 2.55, 16.5);
-    camera.fov = hoekVoorScherm(38);
-    if (c < 0.415) bijschrift = 'Een paar minuten later draait een donkere 911 de stille kruising over.';
+    // Shot 2: VASTE grondcamera op 44 cm boven de klinkers — de donkere 911 raast rakelings langs de lens voorbij!
+    camera.position.set(-14.6, 0.44, 34.8);
+    stuur.target.set(-15.5, 1.05, 25.0);
+    camera.fov = hoekVoorScherm(44);
+    if (c < 0.415) bijschrift = 'Vlak daarna raast een donkere 911 rakelings over de stille klinkers.';
   } else if (c < 0.68) {
-    // Shot 3: Voorgrond-framing langs de rechter garagemuur & donkere linker haag het donkere erf op!
-    camera.position.set(24.2, 1.85, -0.35);
-    stuur.target.set(11.1, 2.10, -0.55);
-    camera.fov = hoekVoorScherm(37);
-    if (c < 0.655) bijschrift = 'Achter de haag aan de Meentweg. Nieuw in het dorp — en alles lijkt donker.';
+    // Shot 3: Strak achter de grote boomstam & haag aan de Meentweg — observerend zicht op het donkere Monastic-erf!
+    camera.position.set(33.2, 1.50, -5.2);
+    stuur.target.set(13.5, 2.35, -0.8);
+    camera.fov = hoekVoorScherm(39);
+    if (c < 0.655) bijschrift = 'Achter de boom aan de Meentweg. Nieuw in het dorp — en het pand ligt in diepe schaduw.';
   } else if (c < 0.84) {
     // Shot 4: Strakke close-up op de bakstenen pier, gezichtloze hoed-schaduw & hand op MONASTIC
     const k = smooth01((c - 0.68) / 0.16);
@@ -2230,8 +2239,8 @@ function pasIntroFrameToe(tNorm, halBeat = -1) {
   zetRegieUI(!!intro, bijschrift);
   camera.updateProjectionMatrix();
   const kop = c < 0.22 ? ['De kruising · 22:14', 'Een schim steekt over langs Bistrot Chapeau'] :
-              c < 0.44 ? ['Torenlaan · Klinkers', 'Een donkere 911 zoeft voorbij de handwijzer'] :
-              c < 0.68 ? ['Meentweg · Achter de haag', 'Het kantoor ligt er donker en stil bij'] :
+              c < 0.44 ? ['Klinkers · Grondniveau', 'Een donkere 911 raast rakelings langs de camera'] :
+              c < 0.68 ? ['Meentweg · Achter de boom', 'De 911 draait het donkere erf van Monastic op'] :
               c < 0.84 ? ['Monastic · Intercom', 'Een schaduw langs de muur… trrring'] :
               c < 0.92 ? ['Monastic · De hal', halBeat === 0 ? 'Even stilte achter de donkere deur…' : halBeat === 1 ? 'Klik — alleen de halverlichting springt aan' : 'Een schim stapt achter het 3D-halraam'] :
                          ['Het erf · Monastic', 'Alleen de halverlichting brandt · sleep om rond te kijken'];
@@ -2253,19 +2262,19 @@ function werkInteractiefVerhaalBij(nu) {
   const elapsed = nu - intro.t0;
 
   if (intro.fase === 'kruising') {
-    const f = Math.min(1, elapsed / 4200);
+    const f = Math.min(1, elapsed / 4000);
     toonBallon('', '', '');
     toonKeuzes('', null);
     pasIntroFrameToe(f * 0.218);
     if (f >= 1) { intro.fase = 'torenlaan'; intro.t0 = nu; }
   } else if (intro.fase === 'torenlaan') {
-    const f = Math.min(1, elapsed / 3000);
+    const f = Math.min(1, elapsed / 2600);
     toonBallon('', '', '');
     toonKeuzes('', null);
     pasIntroFrameToe(0.22 + f * 0.218);
     if (f >= 1) { intro.fase = 'oprit'; intro.t0 = nu; }
   } else if (intro.fase === 'oprit') {
-    const f = Math.min(1, elapsed / 3600);
+    const f = Math.min(1, elapsed / 4000);
     toonBallon('', '', '');
     toonKeuzes('', null);
     pasIntroFrameToe(0.44 + f * 0.238);
