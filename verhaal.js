@@ -547,159 +547,144 @@ export function bouwErfDetails() {
   };
 }
 
-// ---- 5. Anonieme film-noir schim die in Shot 1 over de Blaricumse klinkers bij Bistrot Chapeau loopt (4-frame limited cel, geen gezicht!)
-function tekenLoopSchimFrame(fase) {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 512;
-  const g = c.getContext('2d');
-  g.clearRect(0, 0, 256, 512);
-  // 4 discrete loopfases (stride) met klassieke trenchcoat & gedeukte gleufhoed in zijprofiel naar rechts
-  const pas = [
-    { b1: -34, b2: 30, arm: 18, bob: 0, jas: -14 },
-    { b1: -10, b2: 8,  arm: 6,  bob: -6, jas: -6 },
-    { b1: 30,  b2: -32, arm: -16, bob: 0, jas: -16 },
-    { b1: 8,   b2: -8,  arm: -5, bob: -6, jas: -8 },
-  ][fase % 4];
-  const y0 = 24 + pas.bob;
+// ---- 5. Solide 3D-gebeeldhouwde stilstaande donkere Klare-Lijn figuren in Blaricum (geen platte papieren kaartjes!)
+//         Echt 3D-volume (getailleerde trenchcoat, schouders, opstaande kraag, gleufhoed/silhouet, aktetas, benen)
+//         met strakke zwarte BackSide-inktlijnen zodat ze vanuit élke camerahoek (dag & nacht) massief en stijlvol ogen.
+function maakDonkereFiguur({
+  x = 0, z = 0, rotY = 0, hoogte = 1.82,
+  hoed = true, tas = false, jasKleur = 0x1c2530, broekKleur = 0x111720,
+} = {}) {
+  const g = new THREE.Group();
+  const s = hoogte / 1.82;
+  g.position.set(x, 0.02, z);
+  g.rotation.y = rotY;
+  g.scale.setScalar(s);
 
-  g.fillStyle = '#070b10';
-  g.strokeStyle = '#020406';
-  g.lineWidth = 4;
-  g.lineJoin = 'round';
+  const inktMat = new THREE.MeshBasicMaterial({ color: 0x06090d, side: THREE.BackSide });
+  const jasMat = new THREE.MeshToonMaterial({ color: jasKleur });
+  const jasDonkerMat = new THREE.MeshToonMaterial({ color: 0x0e141c });
+  const broekMat = new THREE.MeshToonMaterial({ color: broekKleur });
+  const tasMat = new THREE.MeshToonMaterial({ color: 0x181c22 });
+  const accentMat = new THREE.MeshBasicMaterial({ color: 0xc8b278 });
 
-  // Achterste been + schoen
-  g.beginPath();
-  g.moveTo(118, y0 + 305);
-  g.lineTo(116 + pas.b2 * 0.65, y0 + 392);
-  g.lineTo(118 + pas.b2, y0 + 462);
-  g.lineTo(148 + pas.b2, y0 + 468);
-  g.lineTo(148 + pas.b2, y0 + 476);
-  g.lineTo(106 + pas.b2, y0 + 476);
-  g.lineTo(98 + pas.b2 * 0.55, y0 + 390);
-  g.lineTo(96, y0 + 305);
-  g.closePath();
-  g.fill();
+  // Hulpfunctie: solide 3D-mesh + strakke zwarte inktomtrek (BackSide shell)
+  function metInkt(geo, mat, sx = 1.07, sy = 1.03, sz = 1.07) {
+    const grp = new THREE.Group();
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    grp.add(m);
+    const out = new THREE.Mesh(geo, inktMat);
+    out.scale.set(sx, sy, sz);
+    grp.add(out);
+    return grp;
+  }
 
-  // Voorste been + schoen
-  g.beginPath();
-  g.moveTo(132, y0 + 305);
-  g.lineTo(136 + pas.b1 * 0.65, y0 + 392);
-  g.lineTo(132 + pas.b1, y0 + 462);
-  g.lineTo(164 + pas.b1, y0 + 468);
-  g.lineTo(164 + pas.b1, y0 + 476);
-  g.lineTo(118 + pas.b1, y0 + 476);
-  g.lineTo(116 + pas.b1 * 0.55, y0 + 390);
-  g.lineTo(112, y0 + 305);
-  g.closePath();
-  g.fill();
+  // Benen + schoenen (natuurlijke stilstaande houding)
+  for (const kant of [-1, 1]) {
+    const been = metInkt(new THREE.CylinderGeometry(0.068, 0.052, 0.72, 10), broekMat, 1.12, 1.02, 1.12);
+    been.position.set(kant * 0.095, 0.38, kant * 0.015);
+    g.add(been);
+    const schoen = metInkt(new THREE.BoxGeometry(0.095, 0.075, 0.22), jasDonkerMat, 1.12, 1.12, 1.08);
+    schoen.position.set(kant * 0.095, 0.038, 0.045 + kant * 0.015);
+    g.add(schoen);
+  }
 
-  // Lange, licht wapperende trenchcoat + schouders + opstaande kraag + gleufhoed (kijkend naar rechts)
-  g.beginPath();
-  // Gleufhoed
-  g.moveTo(92, y0 + 72);
-  g.quadraticCurveTo(106, y0 + 62, 118, y0 + 60);
-  g.lineTo(124, y0 + 34);
-  g.quadraticCurveTo(144, y0 + 26, 162, y0 + 36);
-  g.lineTo(168, y0 + 58);
-  g.quadraticCurveTo(192, y0 + 60, 202, y0 + 70); // voorrand hoed
-  g.quadraticCurveTo(182, y0 + 78, 166, y0 + 78);
-  // Gezichtloos profiel (alleen donkere schim onder hoedrand)
-  g.lineTo(164, y0 + 104);
-  g.lineTo(154, y0 + 114);
-  // Opstaande trenchcoatkraag voor + borst
-  g.lineTo(170, y0 + 124);
-  g.quadraticCurveTo(176, y0 + 178, 166, y0 + 245);
-  g.lineTo(176 + pas.b1 * 0.35, y0 + 348); // voorpand jas
-  g.lineTo(82 + pas.jas, y0 + 356);        // wapperende achterkant jas
-  g.quadraticCurveTo(84, y0 + 245, 92, y0 + 150);
-  g.lineTo(108, y0 + 122);
-  g.lineTo(112, y0 + 104);
-  g.quadraticCurveTo(104, y0 + 88, 108, y0 + 76);
-  g.closePath();
-  g.fill();
+  // Getailleerde lange trenchcoat / overjas (LatheGeometry met volle 3D-schouders, taille en licht uitlopende zoom)
+  const jasProfiel = [
+    new THREE.Vector2(0.24, 0.56), // uitlopende zoom
+    new THREE.Vector2(0.21, 0.78),
+    new THREE.Vector2(0.175, 1.04), // slanke taille (riem)
+    new THREE.Vector2(0.215, 1.28), // borst
+    new THREE.Vector2(0.245, 1.44), // brede schouders
+    new THREE.Vector2(0.145, 1.50), // halslijn
+    new THREE.Vector2(0.115, 1.57), // opstaande trenchcoat-kraag
+    new THREE.Vector2(0.085, 1.55),
+  ];
+  const jasGeo = new THREE.LatheGeometry(jasProfiel, 14);
+  jasGeo.scale(1.10, 1.0, 0.68); // realistische menselijke schouderbreedte vs diepte
+  const jas = metInkt(jasGeo, jasMat, 1.06, 1.015, 1.08);
+  g.add(jas);
 
-  // Zwaaiende mouw/arm met aktekoffer-silhouet (geeft direct "mysterieuze gast" gevoel!)
-  const hx = 132 + pas.arm, hy = y0 + 258;
-  g.beginPath();
-  g.moveTo(124, y0 + 154);
-  g.lineTo(hx + 10, hy);
-  g.lineTo(hx - 10, hy + 4);
-  g.lineTo(108, y0 + 160);
-  g.closePath();
-  g.fill();
-  // Subtiele slanke aktetas aan de hand
-  g.fillRect(hx - 18, hy + 2, 42, 30);
+  // Donkere ceintuur rond taille
+  const riem = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.055, 14), jasDonkerMat);
+  riem.scale.set(1.10, 1.0, 0.69);
+  riem.position.y = 1.04;
+  g.add(riem);
 
-  // Zeer subtiele petrol-blauw maanlicht-rand langs rug & hoedkroon (bindt de schim 100% in het 3D-nachtpalet!)
-  g.strokeStyle = 'rgba(104, 146, 174, 0.42)';
-  g.lineWidth = 3;
-  g.beginPath();
-  g.moveTo(124, y0 + 35);
-  g.quadraticCurveTo(144, y0 + 28, 162, y0 + 37);
-  g.moveTo(92, y0 + 152);
-  g.quadraticCurveTo(84, y0 + 245, 83 + pas.jas, y0 + 354);
-  g.stroke();
+  // Gestructureerde 3D-armen langs het lichaam
+  for (const kant of [-1, 1]) {
+    const bovenArm = metInkt(new THREE.CylinderGeometry(0.064, 0.054, 0.56, 10), jasMat, 1.14, 1.02, 1.14);
+    bovenArm.position.set(kant * 0.255, 1.18, 0.015);
+    bovenArm.rotation.z = kant * 0.07;
+    bovenArm.rotation.x = -0.06;
+    g.add(bovenArm);
+  }
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
+  // Optionele slanke leren aktetas met messing sluitinkje
+  if (tas) {
+    const koffer = metInkt(new THREE.BoxGeometry(0.085, 0.30, 0.40), tasMat, 1.14, 1.06, 1.05);
+    koffer.position.set(0.30, 0.72, 0.06);
+    g.add(koffer);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.032, 0.055), accentMat);
+    slot.position.set(0.30, 0.80, 0.06);
+    g.add(slot);
+  }
 
-export function bouwDorpSchim() {
-  const groep = new THREE.Group();
-  const frames = [0, 1, 2, 3].map(tekenLoopSchimFrame);
-  const mat = new THREE.MeshBasicMaterial({
-    map: frames[0],
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const figuur = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.88), mat);
-  figuur.position.y = 0.94;
-  figuur.renderOrder = 11;
-  groep.add(figuur);
+  // Hoofd (donker, gezichtloos gestileerd — geen kinderachtige trekken)
+  const hoofdGeo = new THREE.SphereGeometry(0.112, 12, 10);
+  hoofdGeo.scale(0.88, 1.08, 0.96);
+  const hoofd = metInkt(hoofdGeo, jasDonkerMat, 1.10, 1.08, 1.10);
+  hoofd.position.set(0, 1.66, 0.01);
+  g.add(hoofd);
 
-  // Lange, scherpe film-noir slagschaduw op de klinkers onder de schim
+  if (hoed) {
+    // Klassieke film-noir gleufhoed (schuin getilde rand + licht geknepen kroon)
+    const hoedGroep = new THREE.Group();
+    hoedGroep.position.set(0, 1.73, 0.015);
+    hoedGroep.rotation.x = 0.08;
+    hoedGroep.rotation.z = -0.05;
+    const randGeo = new THREE.CylinderGeometry(0.21, 0.22, 0.022, 16);
+    randGeo.scale(0.92, 1.0, 1.08);
+    hoedGroep.add(metInkt(randGeo, jasDonkerMat, 1.06, 1.35, 1.06));
+    const kroonGeo = new THREE.CylinderGeometry(0.105, 0.125, 0.115, 14);
+    kroonGeo.scale(0.92, 1.0, 1.06);
+    const kroon = metInkt(kroonGeo, jasMat, 1.08, 1.06, 1.08);
+    kroon.position.y = 0.065;
+    hoedGroep.add(kroon);
+    g.add(hoedGroep);
+  }
+
+  // Strakke grafische slagschaduw op de klinkers onder de voeten
   const schCv = document.createElement('canvas');
   schCv.width = 128; schCv.height = 128;
   const sg = schCv.getContext('2d');
-  sg.fillStyle = 'rgba(6, 10, 15, 0.72)';
+  sg.fillStyle = 'rgba(7, 11, 16, 0.62)';
   sg.beginPath();
-  sg.ellipse(64, 64, 52, 20, -0.25, 0, Math.PI * 2);
+  sg.ellipse(64, 64, 48, 22, -0.25, 0, Math.PI * 2);
   sg.fill();
   const schTex = new THREE.CanvasTexture(schCv);
   const schaduw = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.3, 1.15),
+    new THREE.PlaneGeometry(1.45, 0.78),
     new THREE.MeshBasicMaterial({ map: schTex, transparent: true, depthWrite: false }),
   );
   schaduw.rotation.x = -Math.PI / 2;
-  schaduw.position.set(0.45, 0.04, 0.35);
-  schaduw.renderOrder = 5;
-  groep.add(schaduw);
+  schaduw.position.set(0.24, 0.025, 0.22);
+  schaduw.renderOrder = 4;
+  g.add(schaduw);
 
-  const start = new THREE.Vector3(-13.8, 0.03, 27.8);
-  const eind = new THREE.Vector3(-2.6, 0.03, 18.8);
-  // Richt de schim dwars op het balkonshot (-28, 6.2, 38.6) zodat hij breed in zijprofiel over de klinkers loopt!
-  figuur.rotation.y = -0.62;
-  groep.visible = false;
+  return g;
+}
 
-  return {
-    groep,
-    zetVoortgang(t, zichtbaar = true) {
-      if (!zichtbaar || t < 0 || t > 1) {
-        groep.visible = false;
-        return;
-      }
-      groep.visible = true;
-      groep.position.lerpVectors(start, eind, t);
-      const idx = Math.floor(t * 16) % 4;
-      if (mat.map !== frames[idx]) {
-        mat.map = frames[idx];
-        mat.needsUpdate = true;
-      }
-    },
-  };
+export function bouwDorpFiguren() {
+  const groep = new THREE.Group();
+  // 1. Stijlvolle gast met gleufhoed & aktetas bij de handwijzer / kruising (kijkt richting de Meentweg)
+  groep.add(maakDonkereFiguur({ x: -18.4, z: 23.2, rotY: 0.92, hoogte: 1.84, hoed: true, tas: true, jasKleur: 0x1d2734 }));
+  // 2 & 3. Twee dorpsfiguren in gesprek langs de gevel van Bistrot Chapeau (veilig naast de rijbaan)
+  groep.add(maakDonkereFiguur({ x: -1.8, z: 16.3, rotY: 1.15, hoogte: 1.80, hoed: true, tas: false, jasKleur: 0x242e3b }));
+  groep.add(maakDonkereFiguur({ x: -0.6, z: 17.0, rotY: -1.95, hoogte: 1.74, hoed: false, tas: false, jasKleur: 0x17212e }));
+  // 4. Stille waarnemer op het trottoir aan de Meentweg, uitkijkend op de donkere oprit van Monastic
+  groep.add(maakDonkereFiguur({ x: 25.4, z: 7.4, rotY: -2.42, hoogte: 1.83, hoed: true, tas: false, jasKleur: 0x19232f }));
+  return { groep };
 }
 
 // ---- 6. Anonieme schim rechtstreeks achter het echte 3D-halraam van Monastic + slagschaduw op de gouden lichtwig!

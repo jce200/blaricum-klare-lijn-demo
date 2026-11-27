@@ -1,12 +1,14 @@
-/* De pagina om het getekende dorp heen: papier, een inktkader, en zo weinig bediening als kan. */
+/* De pagina om het getekende dorp heen: papier, een inktkader, en een levend Belgisch stripboek. */
 @font-face { font-family: "Futura PT"; font-weight: 300; src: url("letters/futura-pt-300.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Futura PT"; font-weight: 400; src: url("letters/futura-pt-400.woff2") format("woff2"); font-display: swap; }
 
 :root {
   --papier: #f6f2e7;
-  --inkt: #14110f;
+  --strip-papier: #f8f3e6;
+  --inkt: #11100e;
   --zacht: #6b655c;
   --letter: "Futura PT", "Jost", "Century Gothic", sans-serif;
+  --kuifje-letter: "Futura PT", "Trebuchet MS", "Arial Narrow", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -20,28 +22,49 @@ body {
   min-height: 100svh;
 }
 
+/* Schoon, strak menu: alleen woordmerk + zinvolle bediening */
 .balk {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px 28px;
-  padding: 14px 20px 10px;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 12px 20px 10px;
 }
-.merk { height: 15px; width: auto; filter: invert(1); margin-right: auto; }
-.keuze { display: flex; flex-wrap: wrap; gap: 4px; }
+.merk { height: 15px; width: auto; filter: invert(1); flex-shrink: 0; }
+.balk-acties {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.keuze { display: flex; gap: 2px; border: 1.5px solid var(--inkt); padding: 2px; background: var(--papier); }
 .keuze[hidden] { display: none; }
-.keuze button {
+.balk-acties button {
   font: inherit;
+  font-size: 14.5px;
+  letter-spacing: 0.02em;
   color: var(--inkt);
   background: transparent;
   border: 1.5px solid transparent;
-  padding: 5px 11px 6px;
+  padding: 4px 11px 5px;
   cursor: pointer;
-  transition: background-color 120ms, border-color 120ms;
+  transition: background-color 120ms, color 120ms, border-color 120ms;
 }
-.keuze button:hover { border-color: var(--inkt); }
-.keuze button:focus-visible { outline: 2px solid var(--inkt); outline-offset: 2px; }
-.keuze button[aria-pressed="true"] { background: var(--inkt); color: var(--papier); }
+.balk-acties button:hover { background: rgba(17, 16, 14, 0.08); }
+.balk-acties button:focus-visible { outline: 2px solid var(--inkt); outline-offset: 2px; }
+.balk-acties button[aria-pressed="true"] { background: var(--inkt); color: var(--papier); }
+.balk-acties button.actie {
+  border: 2px solid var(--inkt);
+  box-shadow: 2.5px 2.5px 0 var(--inkt);
+  background: #f7e69b;
+  font-weight: 400;
+  padding: 4px 14px 5px;
+}
+.balk-acties button.actie:hover { background: #f2da74; }
+.balk-acties button.actie[aria-pressed="true"] {
+  background: var(--inkt);
+  color: var(--papier);
+  box-shadow: none;
+}
 
 .kader {
   position: relative;
@@ -53,6 +76,8 @@ body {
 }
 #doek { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 #doek:active { cursor: grabbing; }
+.kader.in-regie #doek { cursor: default; }
+
 .melding {
   position: absolute;
   left: 18px;
@@ -64,10 +89,7 @@ body {
   z-index: 3;
 }
 .melding[hidden] { display: none; }
-.keuze button.actie {
-  border-color: var(--inkt);
-  padding: 5px 13px 6px;
-}
+
 .cartouche {
   position: absolute;
   left: 18px;
@@ -84,24 +106,12 @@ body {
   max-width: 310px;
   transition: opacity 220ms;
 }
-.cartouche strong {
-  font-weight: 400;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  color: var(--inkt);
-}
-.cartouche span {
-  font-weight: 300;
-  font-size: 13px;
-  color: var(--zacht);
-}
+.cartouche strong { font-weight: 400; font-size: 15px; letter-spacing: 0.02em; color: var(--inkt); }
+.cartouche span { font-weight: 300; font-size: 13px; color: var(--zacht); }
 .cartouche[hidden] { display: none; }
+.kader.in-strip .cartouche { opacity: 0; }
 
-.kader.in-regie #doek { cursor: default; }
-
-/* Live Sfeer-overlays direct op het 3D-canvas (GEEN z-index op .sfeer-textuur -> geen stacking-context isolatie, dus echte multiply/soft-light zonder witte waas!):
-   - data-sfeer="noir"  (A): 35mm film-noir korrel, vignet & petrol/amber contrast
-   - data-sfeer="album" (B): warm gedrukt stripalbum met echte multiply-papiervezel, subtiel schaduwraster & zwart kader */
+/* Live Sfeer-overlays direct op het 3D-canvas (GEEN z-index op .sfeer-textuur -> geen stacking-context isolatie!) */
 .sfeer-textuur,
 .sfeer-vignet {
   position: absolute;
@@ -125,7 +135,7 @@ body {
 
 /* Preset B: Gedrukt Belgisch stripalbum (rijke multiply-papiervezel + duidelijk drukraster + stevig stripkader) */
 .kader[data-sfeer="album"] #doek {
-  filter: contrast(1.18) saturate(1.06);
+  filter: contrast(1.16) saturate(1.05);
 }
 .kader[data-sfeer="album"] .sfeer-textuur {
   mix-blend-mode: multiply;
@@ -136,72 +146,342 @@ body {
 }
 .kader[data-sfeer="album"] .sfeer-vignet {
   background:
-    radial-gradient(ellipse at 50% 48%, transparent 42%, rgba(10, 14, 20, 0.48) 100%),
-    radial-gradient(rgba(6, 10, 16, 0.28) 0.85px, transparent 0.85px);
+    radial-gradient(ellipse at 50% 48%, transparent 42%, rgba(10, 14, 20, 0.44) 100%),
+    radial-gradient(rgba(6, 10, 16, 0.26) 0.85px, transparent 0.85px);
   background-size: 100% 100%, 3.5px 3.5px;
   box-shadow: inset 0 0 0 3px #070a0d, inset 0 0 0 11px #f3ede0, inset 0 0 0 14px #070a0d;
 }
+.kader.in-strip[data-sfeer="album"] .sfeer-vignet {
+  box-shadow: none;
+}
 
-.kader[data-sfeer="uit"] .sfeer-textuur,
-.kader[data-sfeer="uit"] .sfeer-vignet { display: none; }
+/* ============================================================================
+   GEANIMEERD BELGISCH STRIPBOEK — WITTE KADERS, LIVE 3D-HOKJES & UITBRAAKLAAG
+   ============================================================================ */
+.strip-boek {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  background: transparent;
+  transition: opacity 420ms ease, transform 460ms ease;
+}
+.strip-boek[hidden] { display: none; }
+.strip-boek.geen-live3d { background: var(--strip-papier); }
+.strip-boek.is-openend { opacity: 0; transform: scale(1.045); pointer-events: none; }
 
-@keyframes celFadeIn {
+.strip-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  display: grid;
+  gap: 13px;
+}
+
+/* Pagina 1 (Overdag): boven 2 hokjes (Terras cel + Live 3D Kruising), onder 1 breed hokje (Porsche cel) */
+.strip-grid[data-pagina="1"] {
+  grid-template-columns: 1.06fr 1fr;
+  grid-template-rows: 1.02fr 0.98fr;
+  grid-template-areas:
+    "a b"
+    "c c";
+}
+/* Pagina 2 ('s Avonds): boven 1 breed hokje (Live 3D Grond-911), onder 2 hokjes (Live 3D Achter boom + Monastic cel) */
+.strip-grid[data-pagina="2"] {
+  grid-template-columns: 1.10fr 1fr;
+  grid-template-rows: 0.92fr 1.08fr;
+  grid-template-areas:
+    "a a"
+    "b c";
+}
+
+.hokje {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  background: #e9e1ce;
+  transition: opacity 280ms ease, transform 320ms cubic-bezier(.22, 1, .36, 1);
+}
+.hokje::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid #0b0e12;
+  pointer-events: none;
+  z-index: 4;
+}
+.hokje-a { grid-area: a; }
+.hokje-b { grid-area: b; }
+.hokje-c { grid-area: c; }
+
+/* Nog niet geopend hokje: subtiel leeg schetsvlak zodat de strippagina direct herkenbaar is */
+.hokje[data-staat="verborgen"] {
+  background: repeating-linear-gradient(
+    -45deg,
+    #efe8d7,
+    #efe8d7 10px,
+    #e8dfc9 10px,
+    #e8dfc9 11px
+  );
+  opacity: 0.55;
+}
+.hokje[data-staat="verborgen"]::after {
+  border-color: rgba(11, 14, 18, 0.25);
+}
+
+/* Actief live 3D-hokje: transparant venster naar #doek, terwijl zijn eigen schaduw de HELE witte stripmarge + goten vult! */
+.hokje.is-live3d {
+  z-index: 1;
+  background: transparent;
+  box-shadow: 0 0 0 3200px var(--strip-papier);
+}
+.hokje[data-staat="actief"]:not(.is-live3d) {
+  background: #0d1620;
+  animation: hokjePop 280ms cubic-bezier(.2, 1.1, .35, 1);
+}
+.hokje[data-staat="klaar"] {
+  background: #0d1620;
+}
+
+.hokje-beeld {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hokje-beeld[hidden] { display: none; }
+/* Subtiel drukraster + warme inkttoon over de cel-plaatjes zodat ze 100% één geheel vormen met het 3D-canvas */
+.hokje:not(.is-live3d)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(rgba(8, 12, 18, 0.14) 0.75px, transparent 0.75px);
+  background-size: 4px 4px;
+}
+
+/* Geel Hergé / Kuifje tijdkader strak in de linkerbovenhoek van een hokje */
+.tijd-kader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  padding: 5px 12px 6px;
+  background: #f8e596;
+  color: #0b0e12;
+  border-right: 3px solid #0b0e12;
+  border-bottom: 3px solid #0b0e12;
+  font: 700 12px/1.15 var(--kuifje-letter);
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tijd-kader[hidden] { display: none; }
+
+@keyframes hokjePop {
+  from { opacity: 0.2; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Overlappende uitbraaklaag BOVEN alle witte kaders en inktlijnen! */
+.uitbraak-laag {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Echte Kuifje / Hergé spraakballon — breekt bewust OVER de zwarte inktkaders en witte goten heen */
+.kuifje-ballon {
+  position: absolute;
+  max-width: min(325px, 42vw);
+  padding: 10px 15px 11px;
+  background: #fffdf6;
+  color: #0b0e12;
+  border: 2.5px solid #0b0e12;
+  border-radius: 14px;
+  box-shadow: 3.5px 3.5px 0 rgba(11, 14, 18, 0.88);
+  font: 700 12.5px/1.34 var(--kuifje-letter);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  animation: kuifjePop 260ms cubic-bezier(.18, 1.25, .36, 1) both;
+}
+.kuifje-ballon .staart {
+  position: absolute;
+  width: 26px;
+  height: 22px;
+  overflow: visible;
+  pointer-events: none;
+}
+.kuifje-ballon.staart-onder-links .staart { left: 26px; bottom: -19px; }
+.kuifje-ballon.staart-onder-rechts .staart { right: 28px; bottom: -19px; transform: scaleX(-1); }
+.kuifje-ballon.staart-boven-links .staart { left: 26px; top: -19px; transform: scaleY(-1); }
+.kuifje-ballon.staart-boven-rechts .staart { right: 28px; top: -19px; transform: scale(-1, -1); }
+
+@keyframes kuifjePop {
+  from { opacity: 0; transform: scale(0.84) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Overlappende geluidseffecten & uitbrekende bewegingsstrepen OVER de witte stripkaders! */
+.strip-sfx {
+  position: absolute;
+  font: 900 32px/1 var(--kuifje-letter);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffe055;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 6px #0b0e12;
+  text-shadow: 4px 4px 0 #0b0e12;
+  white-space: nowrap;
+  animation: sfxKnap 320ms cubic-bezier(.16, 1.35, .35, 1) both;
+}
+.strip-sfx.rood { color: #ff7252; }
+.strip-sfx.groot { font-size: clamp(34px, 4.4vw, 54px); -webkit-text-stroke: 8px #0b0e12; text-shadow: 5px 5px 0 #0b0e12; }
+
+/* Bewegende koplamp- & snelheidsstrepen die dwars OVER de witte kaderlijnen vegen */
+.snelheid-veeg {
+  position: absolute;
+  left: -8%;
+  width: 116%;
+  height: 76px;
+  pointer-events: none;
+  animation: veegDwars 950ms cubic-bezier(.16, .88, .28, 1) both;
+}
+.koplamp-uitbraak {
+  position: absolute;
+  width: 126px;
+  height: 82px;
+  pointer-events: none;
+  animation: lichtPuls 550ms ease-out both;
+}
+.bel-uitbraak {
+  position: absolute;
+  pointer-events: none;
+  animation: belTril 360ms cubic-bezier(.18, 1.3, .34, 1) both;
+}
+
+@keyframes sfxKnap {
+  from { opacity: 0; transform: scale(0.55) rotate(-9deg); }
+  to { opacity: 1; transform: scale(1) rotate(-5deg); }
+}
+@keyframes veegDwars {
+  0%   { opacity: 0; transform: translateX(-22%) skewX(-18deg); }
+  25%  { opacity: 1; }
+  100% { opacity: 0.92; transform: translateX(4%) skewX(-16deg); }
+}
+@keyframes lichtPuls {
+  0%   { opacity: 0; transform: scaleX(0.4); transform-origin: right center; }
+  35%  { opacity: 0.96; transform: scaleX(1.06); transform-origin: right center; }
+  100% { opacity: 0.85; transform: scaleX(1); transform-origin: right center; }
+}
+@keyframes belTril {
+  0%   { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+  45%  { opacity: 1; transform: scale(1.08) rotate(-2deg); }
+  70%  { transform: scale(0.98) rotate(-6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-4deg); }
+}
+
+/* Bladzijde-omslag tussen Overdag (Pagina 1) en 's Avonds (Pagina 2) */
+.pagina-omslag {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 18, 28, 0.92);
+  animation: omslagIn 340ms ease-out;
+}
+.pagina-omslag[hidden] { display: none; }
+.omslag-kaart {
+  padding: 18px 34px 20px;
+  background: #f8e596;
+  color: #0b0e12;
+  border: 3px solid #0b0e12;
+  box-shadow: 6px 6px 0 #0b0e12;
+  text-align: center;
+  transform: rotate(-1.2deg);
+}
+.omslag-label {
+  display: block;
+  font: 700 11px/1 var(--kuifje-letter);
+  letter-spacing: 0.16em;
+  margin-bottom: 6px;
+}
+.omslag-kaart strong {
+  display: block;
+  font: 700 clamp(18px, 2.5vw, 26px)/1.15 var(--kuifje-letter);
+  font-style: italic;
+  letter-spacing: 0.06em;
+}
+@keyframes omslagIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* Klassiek Blake & Mortimer / Kuifje vertelkadertje linksboven tijdens de intro */
-.strip-bijschrift {
-  position: absolute;
-  top: 16px;
-  left: 18px;
-  z-index: 5;
-  margin: 0;
-  padding: 7px 14px 8px;
-  background: #f5ebc2;
-  color: #11151a;
-  border: 2px solid var(--inkt);
-  box-shadow: 3px 3px 0 var(--inkt);
-  font: italic 400 15px/1.35 "Georgia", "Times New Roman", serif;
-  letter-spacing: 0.01em;
-  pointer-events: none;
-  max-width: min(520px, calc(100% - 140px));
-}
+/* Klassieke Kuifje-spraakballon op het vrije 3D-eindscherm (na de strip) */
 .strip-bijschrift[hidden] { display: none; }
-
-/* Volwassen noir-vertelkaart (geen stripballon-staartje, strak kader zoals een grafische roman) */
 .strip-ballon {
   position: absolute;
-  top: 20px;
-  left: 22px;
-  z-index: 5;
-  max-width: min(440px, calc(100% - 150px));
-  padding: 12px 16px 13px;
-  background: rgba(15, 25, 36, 0.92);
-  color: #f4eed8;
-  border: 2px solid #080a0c;
-  box-shadow: 4px 4px 0 rgba(8, 10, 12, 0.90);
+  top: 22px;
+  left: 24px;
+  z-index: 6;
+  max-width: min(410px, calc(100% - 160px));
+  padding: 12px 17px 13px;
+  background: #fffdf6;
+  color: #0b0e12;
+  border: 2.5px solid #0b0e12;
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 rgba(11, 14, 18, 0.90);
   pointer-events: none;
-  animation: celFadeIn 260ms ease-out;
+  animation: kuifjePop 260ms ease-out;
+}
+.strip-ballon::after {
+  content: "";
+  position: absolute;
+  left: 34px;
+  bottom: -14px;
+  width: 0;
+  height: 0;
+  border-left: 11px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 15px solid #0b0e12;
+}
+.strip-ballon::before {
+  content: "";
+  position: absolute;
+  left: 36px;
+  bottom: -10px;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 12px solid #fffdf6;
 }
 .strip-ballon[hidden] { display: none; }
 .ballon-spreker {
   display: block;
-  font-size: 11px;
-  font-weight: 700;
+  font: 700 10.5px/1.1 var(--kuifje-letter);
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #f0d06e;
+  color: #6b4e16;
   margin-bottom: 4px;
 }
 .ballon-tekst {
   margin: 0;
-  font: italic 400 15px/1.4 "Georgia", "Times New Roman", serif;
-  color: #f4eed8;
-}
-@keyframes ballonPop {
-  from { opacity: 0; transform: translateX(-50%) scale(0.92) translateY(5px); }
-  to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+  font: 700 13.5px/1.38 var(--kuifje-letter);
+  font-style: italic;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #0b0e12;
 }
 
 /* Interactieve Kuifje dossier-keuzekaarten onderin beeld */
@@ -223,7 +503,7 @@ body {
   text-align: left;
   font: inherit;
   padding: 10px 13px 11px;
-  background: #f6f0dc;
+  background: #f8f2e0;
   color: #0d1014;
   border: 2.5px solid #080a0c;
   box-shadow: 4px 4px 0 #080a0c;
@@ -237,10 +517,7 @@ body {
   box-shadow: 5.5px 6px 0 #080a0c;
   outline: none;
 }
-.keuze-kaart:active {
-  transform: translate(1.5px, 1.5px);
-  box-shadow: 2px 2px 0 #080a0c;
-}
+.keuze-kaart:active { transform: translate(1.5px, 1.5px); box-shadow: 2px 2px 0 #080a0c; }
 .keuze-kaart .keuze-label {
   display: inline-block;
   font-size: 11px;
@@ -250,38 +527,26 @@ body {
   color: #5b4520;
   margin-bottom: 2px;
 }
-.keuze-kaart strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #080a0c;
-  margin-bottom: 3px;
-}
-.keuze-kaart span {
-  display: block;
-  font-size: 12.5px;
-  line-height: 1.3;
-  color: #343a40;
-}
+.keuze-kaart strong { display: block; font-size: 15px; font-weight: 600; line-height: 1.2; color: #080a0c; margin-bottom: 3px; }
+.keuze-kaart span { display: block; font-size: 12.5px; line-height: 1.3; color: #343a40; }
 @keyframes keuzeOp {
   from { opacity: 0; transform: translateX(-50%) translateY(10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* Discrete Overslaan-knop tijdens de regie-intro */
+/* Overslaan-knop rechtsonder tijdens de geanimeerde strip */
 .overslaan {
   position: absolute;
-  right: 18px;
-  bottom: 16px;
-  z-index: 7;
+  right: 22px;
+  bottom: 20px;
+  z-index: 25;
   font: inherit;
   font-size: 14px;
   color: var(--inkt);
-  background: var(--papier);
-  border: 2px solid var(--inkt);
+  background: #fffdf6;
+  border: 2.5px solid var(--inkt);
   box-shadow: 3px 3px 0 var(--inkt);
-  padding: 6px 13px 7px;
+  padding: 6px 14px 7px;
   cursor: pointer;
   transition: transform 120ms, background-color 120ms;
 }
@@ -289,42 +554,28 @@ body {
 .overslaan:active { transform: translate(1px, 1px); }
 .overslaan[hidden] { display: none; }
 
-.voet { margin: 0; padding: 9px 22px 14px; color: var(--zacht); font-size: 15px; }
+.voet { margin: 0; padding: 9px 22px 14px; color: var(--zacht); font-size: 14.5px; }
 
 @media (max-width: 720px) {
-  .balk {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    gap: 8px 14px;
-    padding: 8px 12px;
-    scrollbar-width: none;
-  }
-  .balk::-webkit-scrollbar { display: none; }
-  .merk { height: 13px; flex-shrink: 0; }
-  .keuze { flex-wrap: nowrap; flex-shrink: 0; gap: 2px; }
-  .keuze button { padding: 5px 9px; font-size: 14px; white-space: nowrap; }
+  .balk { padding: 8px 12px; gap: 8px; }
+  .merk { height: 13px; }
+  .balk-acties { gap: 8px; }
+  .balk-acties button { padding: 4px 8px; font-size: 13px; }
   .kader { margin: 0 8px 8px; border-width: 2px; }
+  .strip-grid { padding: 8px; gap: 8px; }
+  .kuifje-ballon { max-width: 68vw; font-size: 10.5px; padding: 7px 10px; }
+  .strip-sfx { font-size: 22px; }
   .cartouche { left: 10px; bottom: 10px; padding: 5px 9px; }
   .cartouche strong { font-size: 13px; }
   .cartouche span { display: none; }
-  .strip-bijschrift { top: 10px; left: 10px; font-size: 13px; padding: 4px 9px; }
-  .cel-porsche { object-position: 32% 54%; }
-  .cel-deur { object-position: 38% 38%; }
-  .strip-ballon { top: 10px; left: 50% !important; padding: 8px 12px; max-width: calc(100% - 20px); }
-  .ballon-tekst { font-size: 13.5px; }
-  .verhaal-keuze {
-    grid-template-columns: 1fr;
-    width: calc(100% - 20px);
-    bottom: 54px;
-    gap: 6px;
-  }
+  .verhaal-keuze { grid-template-columns: 1fr; width: calc(100% - 20px); bottom: 54px; gap: 6px; }
   .keuze-kaart { padding: 7px 10px; }
-  .keuze-kaart strong { font-size: 13.5px; }
-  .keuze-kaart span { font-size: 11.5px; }
-  .overslaan { right: 10px; bottom: 10px; font-size: 13px; padding: 5px 10px; }
+  .overslaan { right: 12px; bottom: 12px; font-size: 13px; padding: 5px 10px; }
   .voet { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .keuze button, .cartouche, .cel-porsche, .cel-glans, .cel-deur-laag, .strip-ballon, .verhaal-keuze { transition: none; animation: none; }
+  .balk-acties button, .cartouche, .strip-boek, .hokje, .kuifje-ballon, .strip-sfx, .snelheid-veeg, .verhaal-keuze {
+    transition: none;
+    animation: none;
+  }
 }

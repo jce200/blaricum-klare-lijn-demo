@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blaricum in klare lijn</title>
+  <title>Monastic · Blaricum in klare lijn</title>
   <link rel="icon" href="favicon.svg">
   <link rel="stylesheet" href="stijl.css">
   <script type="importmap">
@@ -13,34 +13,51 @@
 <body>
   <header class="balk">
     <img class="merk" src="woordmerk.svg" alt="Monastic">
-    <nav class="keuze" aria-label="Standpunt">
-      <button type="button" data-stand="hoekpand">Het hoekpand</button>
-      <button type="button" data-stand="kruising">De kruising</button>
-      <button type="button" data-stand="wijzer">De handwijzer</button>
-      <button type="button" data-stand="erf">Het erf</button>
-      <button type="button" data-stand="straat">De straat</button>
-      <button type="button" data-stand="plein">Het plein</button>
-      <button type="button" data-stand="dorp">Het dorp</button>
-    </nav>
-    <nav class="keuze" aria-label="Tijdstip">
-      <button type="button" data-tijd="nacht" aria-pressed="true">Nacht</button>
-      <button type="button" data-tijd="dag" aria-pressed="false">Dag</button>
-    </nav>
-    <nav class="keuze" aria-label="Sfeer">
-      <button type="button" data-sfeer="noir" aria-pressed="true">Noir (A)</button>
-      <button type="button" data-sfeer="album" aria-pressed="false">Album (B)</button>
-      <button type="button" data-sfeer="uit" aria-pressed="false">Kaal</button>
-    </nav>
-    <div class="keuze" aria-label="Animatie">
-      <button type="button" id="intro-knop" class="actie" aria-pressed="false">Intro</button>
-      <button type="button" id="rondleiding" class="actie" aria-pressed="false">Rondleiding</button>
+    <div class="balk-acties">
+      <button type="button" id="intro-knop" class="actie" aria-pressed="false">Speel strip</button>
+      <nav class="keuze" aria-label="Tijdstip">
+        <button type="button" data-tijd="dag" aria-pressed="false">Dag</button>
+        <button type="button" data-tijd="nacht" aria-pressed="true">Nacht</button>
+      </nav>
+      <nav class="keuze" aria-label="Sfeer">
+        <button type="button" data-sfeer="album" aria-pressed="true">Album</button>
+        <button type="button" data-sfeer="noir" aria-pressed="false">Noir</button>
+      </nav>
     </div>
   </header>
-  <main class="kader" data-sfeer="noir">
+  <main class="kader" data-sfeer="album">
     <canvas id="doek"></canvas>
     <div class="sfeer-textuur" aria-hidden="true"></div>
     <div class="sfeer-vignet" aria-hidden="true"></div>
-    <p class="strip-bijschrift" id="strip-bijschrift" hidden>22:14 · Blaricum.</p>
+
+    <!-- Levendig geanimeerd Belgisch stripboek met witte kaders, live 3D-hokjes, limited-cel en uitbrekende spraakballonnen -->
+    <section class="strip-boek" id="strip-boek" hidden aria-label="Geanimeerd stripverhaal">
+      <div class="strip-grid" id="strip-grid" data-pagina="1">
+        <article class="hokje hokje-a" id="hokje-a" data-staat="verborgen">
+          <img class="hokje-beeld" id="hokje-a-img" alt="" hidden>
+          <span class="tijd-kader" id="hokje-a-tijd" hidden></span>
+        </article>
+        <article class="hokje hokje-b" id="hokje-b" data-staat="verborgen">
+          <img class="hokje-beeld" id="hokje-b-img" alt="" hidden>
+          <span class="tijd-kader" id="hokje-b-tijd" hidden></span>
+        </article>
+        <article class="hokje hokje-c" id="hokje-c" data-staat="verborgen">
+          <img class="hokje-beeld" id="hokje-c-img" alt="" hidden>
+          <span class="tijd-kader" id="hokje-c-tijd" hidden></span>
+        </article>
+      </div>
+      <!-- Overlappende laag BOVEN de witte kaders: Kuifje-spraakballonnen, geluidseffecten & uitbrekende beweging -->
+      <div class="uitbraak-laag" id="uitbraak-laag"></div>
+      <!-- Tussenpagina-omslag van middag naar avond -->
+      <div class="pagina-omslag" id="pagina-omslag" hidden>
+        <div class="omslag-kaart">
+          <span class="omslag-label">BLADZIJDE 2</span>
+          <strong>DIEZELFDE AVOND · 22:14</strong>
+        </div>
+      </div>
+    </section>
+
+    <p class="strip-bijschrift" id="strip-bijschrift" hidden></p>
     <div class="strip-ballon" id="strip-ballon" hidden role="status" aria-live="polite">
       <span class="ballon-spreker" id="ballon-spreker"></span>
       <p class="ballon-tekst" id="ballon-tekst"></p>
@@ -48,12 +65,12 @@
     <div class="verhaal-keuze" id="verhaal-keuze" hidden role="group" aria-label="Vervolg"></div>
     <button type="button" class="overslaan" id="overslaan-knop" hidden>Overslaan →</button>
     <aside class="cartouche" id="cartouche" aria-live="polite">
-      <strong id="cartouche-titel">Het hoekpand · Nacht</strong>
-      <span id="cartouche-sub">Hoek Meentweg en Huizerweg, Blaricum</span>
+      <strong id="cartouche-titel">Monastic · Blaricum</strong>
+      <span id="cartouche-sub">Meentweg &amp; Huizerweg</span>
     </aside>
     <p class="melding" id="melding">Het dorp wordt getekend.</p>
   </main>
-  <p class="voet">Sleep om te draaien, scrol om in te zoomen · toetsen 1–7 voor standpunten, I voor de openingsscène, Esc om over te slaan, spatie voor rondleiding.</p>
+  <p class="voet">Sleep om rond te kijken, scrol om in te zoomen · klik ‘Speel strip’ of druk op I voor het verhaal.</p>
   <script type="module" src="app.js"></script>
 </body>
 </html>
