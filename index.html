@@ -37,7 +37,15 @@
       <div class="cel-glans" id="cel-glans"></div>
       <img class="cel-porsche" id="cel-porsche" src="cels/porsche-cel.webp" alt="">
     </div>
+    <div class="cel-deur-laag" id="cel-deur-laag" hidden aria-hidden="true">
+      <img class="cel-deur" id="cel-deur" src="cels/deur-cel.webp" alt="">
+    </div>
     <p class="strip-bijschrift" id="strip-bijschrift" hidden>Blaricum, laat op de avond…</p>
+    <div class="strip-ballon" id="strip-ballon" hidden role="status" aria-live="polite">
+      <span class="ballon-spreker" id="ballon-spreker"></span>
+      <p class="ballon-tekst" id="ballon-tekst"></p>
+    </div>
+    <div class="verhaal-keuze" id="verhaal-keuze" hidden role="group" aria-label="Kies het vervolg van het verhaal"></div>
     <button type="button" class="overslaan" id="overslaan-knop" hidden>Overslaan →</button>
     <aside class="cartouche" id="cartouche" aria-live="polite">
       <strong id="cartouche-titel">Het hoekpand · Nacht</strong>
@@ -45,7 +53,7 @@
     </aside>
     <p class="melding" id="melding">Het dorp wordt getekend.</p>
   </main>
-  <p class="voet">Sleep om te draaien, scrol om in te zoomen · toetsen 1–7 voor standpunten, I voor de Kuifje-intro, Esc om over te slaan, spatie voor rondleiding.</p>
+  <p class="voet">Sleep om te draaien, scrol om in te zoomen · toetsen 1–7 voor standpunten, I voor het Kuifje-verhaal, Esc om over te slaan, spatie voor rondleiding.</p>
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -72,7 +72,7 @@ const laad = async (naam, Soort) => {
   return new Soort(await r.arrayBuffer());
 };
 
-// Wat alle tekenprogramma's delen: zon, schaduwkaart, nevel, echte straatlantaarnkringen en live Porsche-koplampen.
+// Wat alle tekenprogramma's delen: zon, maanrichting, schaduwkaart, nevel, straatlantaarns, ganglicht en Porsche-koplampen.
 const LICHT = {
   uZon: { value: new THREE.Vector3(0, 1, 0) }, uLichtMat: { value: new THREE.Matrix4() }, uSlagKaart: { value: null },
   uSlag: { value: SLAG ? 1 : 0 }, uNevel: { value: new THREE.Color() }, uNevelMaat: { value: new THREE.Vector3(150, 560, 0.5) },
@@ -81,6 +81,8 @@ const LICHT = {
   uLamp: { value: Array.from({ length: 40 }, () => new THREE.Vector4()) }, uLampN: { value: 0 },
   uKopPos: { value: new THREE.Vector3(0, 0.64, 0) }, uKopDir: { value: new THREE.Vector3(0, 0, 1) }, uKopAan: { value: 0 },
   uLampKleur: { value: new THREE.Color(0.914, 0.835, 0.412) }, uNacht: { value: 0 },
+  uMaanDir: { value: new THREE.Vector3(420, 260, -980).normalize() },
+  uGangLicht: { value: 0 },
 };
 
 // Ruis die vastzit aan de wereld: dezelfde plek geeft altijd dezelfde waarde, dus een bochtje blijft staan
@@ -98,7 +100,7 @@ const RUIS = `
                mix(mix(klHash(i + vec3(0, 0, 1)), klHash(i + vec3(1, 0, 1)), f.x), mix(klHash(i + vec3(0, 1, 1)), klHash(i + vec3(1, 1, 1)), f.x), f.y), f.z) * 2.0 - 1.0;
   }`;
 
-// Slagschaduw, nevel en nacht-lamplicht (alleen echte straatlantaarns, directe etalagegloed en koplampen vóór de Porsche).
+// Slagschaduw, nevel en nacht-lamplicht (alleen echte straatlantaarns, directe etalagegloed, wandlantaarn en koplampen vóór de Porsche).
 const SLAGCODE = `
   uniform sampler2D uSlagKaart;
   uniform mat4 uLichtMat;
@@ -119,38 +121,57 @@ const SLAGCODE = `
   uniform float uKopAan;
   uniform vec3 uLampKleur;
   uniform float uNacht;
+  uniform vec3 uMaanDir;
+  uniform float uGangLicht;
   bool klSlag(vec3 p, vec3 n, float weg) {
     if (uSlag < 0.5) return false;
     vec3 q = p + n * weg + 0.05 * vec3(klRuis(p * 0.8), 0.0, klRuis(p * 0.8 + 31.0));
     vec4 l = uLichtMat * vec4(q, 1.0);
     vec3 s = l.xyz / l.w * 0.5 + 0.5;
     if (s.x <= 0.0 || s.x >= 1.0 || s.y <= 0.0 || s.y >= 1.0 || s.z >= 1.0) return false;
-    // Negen metingen over ruim drie pixels van de kaart: met vier was de rand op een kruin een trapje.
     float t = 1.3 / ${SLAGMAAT}.0, som = 0.0;
     for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++)
       som += step(texture2D(uSlagKaart, s.xy + vec2(float(i), float(j)) * t).r + 0.00018, s.z);
     return som > 4.5;
   }
   vec3 klNevel(vec3 kleur, float afstand) {
-    // Zuivere Klare Lijn: spiegelgladde egale kleurvlakken (aplats) zonder papierruis in zowel Dag als Nacht.
     float vlek = uKlare > 0.5 ? 0.0 : (0.6 * klRuis(vec3(gl_FragCoord.xy * 0.055, 1.0)) + 0.7 * klRuis(vec3(gl_FragCoord.xy * 0.007, 7.0)));
     return mix(kleur, uNevel, uNevelMaat.z * smoothstep(uNevelMaat.x, uNevelMaat.y, afstand)) * (1.0 + 0.022 * vlek);
   }
   float klLamp(vec3 p, vec3 n) {
     if (uNacht < 0.05) return 0.0;
     float k = 0.0;
-    float golf = 0.24 * klRuis(p * 0.7);
-    // 1. Echte straatlantaarns uit model.lampen en directe gloed vlak voor de verlichte hoekpand-etalage.
+    float golf = 0.16 * klRuis(p * 0.7);
+    // 1. Echte straatlantaarns, directe etalagegloed en de intieme wandlantaarn boven de Monastic-intercom.
     for (int i = 0; i < 40; i++) {
       if (i >= uLampN) break;
       vec3 v = uLamp[i].xyz - p;
-      float d = length(v) + golf;
-      // Een lantaarn schijnt omlaag: wat boven de lamp zit (een kruin, een dak) blijft donker.
-      if (d < uLamp[i].w && v.y > 0.25 && dot(n, v) > 0.0) {
-        k = max(k, d < uLamp[i].w * 0.62 ? 0.72 : 0.42);
+      float rad = uLamp[i].w;
+      if (abs(n.y) < 0.45) {
+        // Op verticale gevels: zachte ronde warme lichtkring (geen harde platte balk, behoudt de rijke baksteenkleur!)
+        vec3 vw = vec3(v.x, v.y - 0.12, v.z);
+        float dw = length(vw) + golf * 0.6;
+        if (dw < rad * 0.92 && dot(n, v) > 0.0) {
+          k = max(k, dw < rad * 0.48 ? 0.34 : 0.17);
+        }
+      } else {
+        // Op de grond (asfalt/grind/stoep): krachtige, heldere Ligne Claire-lichtcirkel onder elke lantaarn!
+        float d = length(v) + golf;
+        if (d < rad && v.y > 0.22 && dot(n, v) > 0.0) {
+          k = max(k, d < rad * 0.58 ? 0.74 : 0.42);
+        }
       }
     }
-    // 2. Porsche-koplampbundels: twee strakke uiteenwijkende Ligne Claire-lichtbundels vóór de voorbumper (nooit onder de auto!).
+    // 2. Warm licht dat na het aanbellen uit het gangraampje van Monastic schuin over het donkere grind valt.
+    if (uGangLicht > 0.05 && p.y < 0.35 && n.y > 0.65) {
+      vec2 dg = p.xz - vec2(9.2, -1.25);
+      float raamVal = step(-1.0, dg.x) * step(dg.x, 2.8) * step(-0.65, dg.y) * step(dg.y, 1.15);
+      if (raamVal > 0.5) {
+        float dr = length(dg * vec2(0.52, 0.90));
+        k = max(k, (dr < 0.78 ? 0.68 : 0.38) * uGangLicht);
+      }
+    }
+    // 3. Porsche-koplampbundels op het wegdek: strakke Ligne Claire-lichtbundels vóór de voorbumper.
     if (uKopAan > 0.05 && p.y < 0.34 && n.y > 0.65) {
       vec3 rel = p - uKopPos;
       float a = dot(rel, uKopDir);
@@ -161,9 +182,9 @@ const SLAGCODE = `
         float dMin = min(abs(lat - 0.63), abs(lat + 0.65)) / wL;
         float neus = (a - 0.55) / 0.45;
         bool inNeus = neus >= 1.0 || (dMin * dMin + (1.0 - neus) * (1.0 - neus) < 1.0);
-        float reik = a + 0.35 * golf;
+        float reik = a + 0.32 * golf;
         if (inNeus && dMin < 1.0 && reik < 15.2) {
-          float bundel = (reik < 8.4 && dMin < 0.72) ? 0.72 : 0.42;
+          float bundel = (reik < 8.4 && dMin < 0.72) ? 0.74 : 0.44;
           k = max(k, bundel * uKopAan);
         }
       }
@@ -171,7 +192,7 @@ const SLAGCODE = `
     return k * uNacht;
   }`;
 
-// ---- De vlakken: egale klare-lijn-tonen + spaarzame losse Hergé-bakstenen, muurplint, grindkiezels en nachtlamplicht.
+// ---- De vlakken: zuivere egale Hergé-kleurvlakken (zonder druk baksteenpatroon), sfeervolle erfschaduwen en maanreflecties!
 const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: new Float32Array(vakken * 6) }, ...LICHT },
   vertexShader: `
@@ -200,101 +221,105 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       bool isRuit = (s == ${id.ruit_donker} || s == ${id.ruit_licht} || s == ${id.ruit_aan} || s == ${id.ruit_kantoor});
       bool isBrandRuit = (s == ${id.ruit_kantoor} || s == ${id.ruit_aan} || s == ${id.raamlicht});
       bool isBaksteen = (s == ${id.baksteen_rood} || s == ${id.baksteen_bruin} || s == ${id.baksteen_geel});
+      bool isDak = (s == ${id.dak_lei} || s == ${id.dak_grijs} || s == ${id.dak_antraciet} || s == ${id.dak_bruinrood} || s == ${id.dak_terracotta} || s == ${id.dak_oranje} || s == ${id.dak_riet});
       bool isGrind = (s == ${id.erf} || s == ${id.grind} || s == ${id.tuinpad});
 
-      // 0a. Ligne Claire losse bakstenen & donkere muurplint op verticale baksteengevels (zoals bij Hergé & Chaland!):
-      //     Nooit een druk raster: alleen spaarzame groepjes van 2–5 losse stenen in halfsteensverband + subtiele tintvariatie!
+      // 0a. Zuivere Hergé-gevels: rustig egaal kleurvlak + strakke donkere muurplint onderaan.
+      //     Geen druk baksteenraster over het dorp — alleen in de close-up rond de Monastic-intercom 3 subtiele steenlijntjes!
       if (isBaksteen && abs(n.y) < 0.35 && dist < 44.0) {
-        float fadeB = 1.0 - smoothstep(22.0, 42.0, dist);
-        // Strakke hardstenen muurplint onderaan de gevel (y < 0.40 m) met een heldere horizontale inktrand
+        float fadeB = 1.0 - smoothstep(24.0, 42.0, dist);
         float fwY = max(fwidth(vP.y), 0.0025);
-        float inPlint = 1.0 - smoothstep(0.40 - fwY, 0.40 + fwY, vP.y);
-        float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.40))) * fadeB;
-        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.18, 0.21, 0.24) : vec3(0.55, 0.54, 0.51);
-        k = mix(k, plintKleur, inPlint * 0.84);
-        k = mix(k, uInktKleur, plintRand * 0.92);
+        float inPlint = 1.0 - smoothstep(0.38 - fwY, 0.38 + fwY, vP.y);
+        float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.38))) * fadeB;
+        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.15, 0.18, 0.22) : vec3(0.55, 0.54, 0.51);
+        k = mix(k, plintKleur, inPlint * 0.85);
+        k = mix(k, uInktKleur, plintRand * 0.90);
 
-        if (vP.y > 0.42) {
+        // Alleen van héél dichtbij (Shot 4 bij de intercom): 3–4 rustige losse Hergé-stenen op de pier
+        float bijBel = length(vP - vec3(7.989, 1.52, -1.686));
+        if (dist < 3.4 && bijBel < 0.78 && vP.y > 0.42) {
           vec3 tang = normalize(vec3(-n.z, 0.0, n.x));
-          float u = dot(vP, tang);
-          float v = vP.y;
-          // Echt Nederlands Waalformaat (22 × 6,5 cm) in halfsteensverband
-          float bh = 0.066, bw = 0.22;
+          float u = dot(vP, tang), v = vP.y;
+          float bh = 0.072, bw = 0.23;
           float rij = floor(v / bh);
           float uOff = u + mod(rij, 2.0) * (bw * 0.5);
           float kol = floor(uOff / bw);
           vec2 f = vec2(fract(uOff / bw), fract(v / bh));
-
-          // Organische groepjes (clusters) zodat ~12% van de muur losse getekende stenen toont en 88% strak egaal blijft!
-          vec3 grp = floor(vec3(uOff * 0.92, v * 1.45, dot(vP, n) * 0.5));
-          float hGrp = klHash(grp + vec3(4.3, 1.9, 7.1));
-          float hSteen = klHash(vec3(kol, rij, floor(dot(vP, n) * 2.0) + 13.7));
-          // Zorg dat ook de smalle bakstenen pier rondom de Monastic-intercom (7.989, 1.52, -1.686) 3–4 fraaie losse stenen heeft!
-          float bijBel = 1.0 - smoothstep(0.55, 0.78, length(vP - vec3(7.989, 1.52, -1.686)));
-          float drempel = hGrp > 0.64 ? 0.56 : mix(0.945, 0.78, bijBel);
-          if (hSteen > drempel) {
-            // Subtiele vlakke kleuraccentuering op losse bakstenen (iets warmer/donkerder per steen)
-            float tint = hSteen > 0.84 ? 1.14 : 0.87;
-            k *= mix(1.0, tint, fadeB * 0.85);
-            // Haarscherpe anti-aliased inktlijn rond de losse baksteen
+          float hSteen = klHash(vec3(kol, rij, 13.7));
+          if (hSteen > 0.84) {
             float fwU = max(fwidth(uOff / bw), 0.008);
             float fwV = max(fwidth(v / bh), 0.015);
-            float dikU = max(0.022, fwU * 1.15);
-            float dikV = max(0.055, fwV * 1.15);
+            float dikU = max(0.020, fwU * 1.15);
+            float dikV = max(0.048, fwV * 1.15);
             float randU = max(1.0 - smoothstep(dikU - fwU, dikU + fwU, f.x), smoothstep(1.0 - dikU - fwU, 1.0 - dikU + fwU, f.x));
             float randV = max(1.0 - smoothstep(dikV - fwV, dikV + fwV, f.y), smoothstep(1.0 - dikV - fwV, 1.0 - dikV + fwV, f.y));
-            float lijnS = max(randU, randV);
-            k = mix(k, uInktKleur, lijnS * fadeB * 0.86);
-          } else if (hGrp > 0.72 && hSteen > 0.44 && hSteen < 0.50) {
-            // Enkele losse korte horizontale voegstreepjes voor typische Hergé-suggestie
-            float fwV = max(fwidth(v / bh), 0.015);
-            float dikV = max(0.050, fwV * 1.1);
-            float voeg = (1.0 - smoothstep(dikV - fwV, dikV + fwV, f.y)) * step(0.15, f.x) * step(f.x, 0.85);
-            k = mix(k, uInktKleur, voeg * fadeB * 0.72);
+            float fadeClose = 1.0 - smoothstep(2.2, 3.3, dist);
+            k *= mix(1.0, 0.92, fadeClose * 0.65);
+            k = mix(k, uInktKleur, max(randU, randV) * fadeClose * 0.78);
           }
         }
       }
 
-      // 0b. Ligne Claire spaarzame grindkiezels & korte inktstreepjes op de oprit / het erf (rustig, 92% egaal vlak!)
-      if (isGrind && n.y > 0.85 && dist < 30.0) {
-        float fadeG = 1.0 - smoothstep(12.0, 28.0, dist);
-        // Fijne groepjes van kleine ovale kiezelsteentjes & korte horizonstreepjes
-        vec2 gCel = floor(vP.xz * 2.1);
-        vec2 gF = fract(vP.xz * 2.1);
+      // 0b. Sfeervolle, vlijmscherpe 2-toons Ligne Claire nachtschaduwen op het Monastic-erf & de oprit!
+      if (uNacht > 0.5 && n.y > 0.80 && isGrind && vP.x > 6.5 && vP.x < 28.5 && vP.z > -9.5 && vP.z < 5.5) {
+        // Strakke architectonische schaduwranden langs kantoorgevel, garagewand en straatheg (scherpe strip-overgang!)
+        float muurSchaduw = 1.0 - smoothstep(10.8, 10.90, vP.x + vP.z * 0.22);
+        float garageSchaduw = (1.0 - smoothstep(-2.35, -2.25, vP.z + (vP.x - 16.0) * 0.12)) * smoothstep(11.0, 11.12, vP.x);
+        float hegSchaduw = smoothstep(0.65, 0.76, vP.z - (vP.x - 16.0) * 0.16) * (1.0 - smoothstep(23.1, 23.22, vP.x));
+        float hoekDiep = clamp(max(max(muurSchaduw, garageSchaduw), hegSchaduw), 0.0, 1.0);
+        // Diep nacht-indigo schaduwvlak zodat de warme wandlantaarn, het gangraampje en de koplampen schitteren!
+        k = mix(k, k * vec3(0.54, 0.60, 0.72), hoekDiep * 0.88);
+      }
+
+      // 0c. Zeer spaarzame, fijne Hergé-grondstreepjes op grind/stoep dichtbij (96% strak egaal vlak!)
+      if (isGrind && n.y > 0.85 && dist < 24.0) {
+        float fadeG = 1.0 - smoothstep(10.0, 22.0, dist);
+        vec2 gCel = floor(vP.xz * 1.9);
+        vec2 gF = fract(vP.xz * 1.9);
         float hC = klHash(vec3(gCel, 9.4));
-        if (hC > 0.74) {
+        if (hC > 0.87) {
           float ox = 0.25 + 0.50 * klHash(vec3(gCel, 1.7));
           float oz = 0.25 + 0.50 * klHash(vec3(gCel, 5.3));
-          vec2 d = (gF - vec2(ox, oz)) * vec2(1.0, 1.65);
-          float r = length(d);
-          float fw = max(fwidth(r), 0.008);
-          if (hC > 0.85) {
-            // Klein ovaal getekend kiezelsteentje (iets lichter vlak + dunne zwarte inktomtrek)
-            float inK = 1.0 - smoothstep(0.068 - fw, 0.068 + fw, r);
-            float randK = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(r - 0.068)));
-            k = mix(k, k * 1.16, inK * fadeG * 0.75);
-            k = mix(k, uInktKleur, randK * fadeG * 0.80);
-          } else {
-            // Korte, fijne horizontale Hergé-grondstreep
-            float streep = (1.0 - smoothstep(0.016 - fw, 0.016 + fw, abs(gF.y - oz)))
-                         * (1.0 - smoothstep(0.11 - fw, 0.11 + fw, abs(gF.x - ox)));
-            k = mix(k, uInktKleur, streep * fadeG * 0.68);
-          }
+          float fw = max(fwidth(gF.y), 0.008);
+          float streep = (1.0 - smoothstep(0.015 - fw, 0.015 + fw, abs(gF.y - oz)))
+                       * (1.0 - smoothstep(0.11 - fw, 0.11 + fw, abs(gF.x - ox)));
+          k = mix(k, uInktKleur, streep * fadeG * 0.55);
         }
-      } else if (s == ${id.stoep} && n.y > 0.85 && dist < 22.0) {
-        // Spaarzame Hergé-tegelvoegjes op de stoep dicht bij de camera
-        float fadeS = 1.0 - smoothstep(10.0, 20.0, dist);
+      } else if (s == ${id.stoep} && n.y > 0.85 && dist < 20.0) {
+        float fadeS = 1.0 - smoothstep(9.0, 18.0, dist);
         vec2 tCel = floor(vP.xz * 1.65);
         vec2 tF = fract(vP.xz * 1.65);
         float hT = klHash(vec3(tCel, 14.2));
-        if (hT > 0.76) {
+        if (hT > 0.82) {
           float fw = max(fwidth(tF.x), 0.008);
-          float voeg = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, tF.x)) * step(0.18, tF.y) * step(tF.y, 0.82);
-          k = mix(k, uInktKleur, voeg * fadeS * 0.55);
+          float voeg = (1.0 - smoothstep(0.016 - fw, 0.016 + fw, tF.x)) * step(0.20, tF.y) * step(tF.y, 0.80);
+          k = mix(k, uInktKleur, voeg * fadeS * 0.48);
         }
       }
 
-      // 1. Ruiten: verlichte etalages gloeien warm goud met schuine reflectie; donkere ruiten vangen een koele glansstreep.
+      // 1. Maanlichtreflectie op daken & kantoor (koele zilverblauwe Ligne Claire-maanrand op hoge dakvlakken & nokken!)
+      if (uNacht > 0.5 && isDak && n.y > 0.18) {
+        float maanDot = dot(n, uMaanDir);
+        float hoog = smoothstep(3.4, 8.6, vP.y);
+        float directMaan = smoothstep(0.06, 0.12, maanDot);
+        // Ook hoge schuine dakvlakken richting de hemel (zoals het grote hoekpanddak onder de maan!) vangen een koele maanglans
+        float hemelMaan = smoothstep(6.2, 10.2, vP.y) * smoothstep(0.35, 0.65, n.y) * 0.55;
+        float sterk = clamp(max(directMaan * (0.28 + 0.30 * hoog), hemelMaan), 0.0, 0.72);
+        if (sterk > 0.01) {
+          vec3 maanTint = vec3(0.36, 0.50, 0.64);
+          k = mix(k, maanTint, sterk * uNacht);
+          // Strakke zilveren maanreflectie-streep langs de hogere dakvlakken
+          float glansBand = smoothstep(0.78, 0.84, fract(vP.y * 0.44)) * hoog * smoothstep(0.08, 0.20, max(maanDot, hemelMaan));
+          k = mix(k, vec3(0.58, 0.73, 0.86), glansBand * 0.30 * uNacht);
+        }
+      }
+      // Subtiele koele maanrand op de bovenzijde van bakstenen/gepleisterde gevels gericht op de maan
+      if (uNacht > 0.5 && (isBaksteen || s == ${id.pleister} || s == ${id.kalkwit}) && abs(n.y) < 0.35) {
+        float maanGevel = smoothstep(0.25, 0.32, dot(n, uMaanDir)) * smoothstep(2.4, 5.2, vP.y);
+        k = mix(k, mix(k, vec3(0.40, 0.53, 0.66), 0.34), maanGevel * uNacht);
+      }
+
+      // 2. Ruiten: verlichte etalages gloeien warm goud; donkere ruiten vangen een koele zilveren maanreflectie!
       if (isRuit && abs(n.y) < 0.85) {
         float diag = (vP.x * 0.62 - vP.z * 0.58) + vP.y * 1.15;
         float g = fract(diag * 0.36);
@@ -314,11 +339,14 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           k = mix(k, vec3(0.50, 0.51, 0.41), boven * 0.46);
           k = mix(k, vec3(0.95, 0.91, 0.68), glans * 0.42);
         } else {
-          k = mix(k, vec3(0.24, 0.36, 0.45), glans * 0.42);
+          // Maanreflectie in donkere ramen van het kantoor en het dorp!
+          float maanRuit = smoothstep(-0.1, 0.35, dot(n, uMaanDir));
+          vec3 maanSpiegel = mix(vec3(0.24, 0.38, 0.49), vec3(0.48, 0.64, 0.78), maanRuit);
+          k = mix(k, maanSpiegel, glans * (0.45 + 0.25 * maanRuit));
         }
       }
 
-      // 2. Lamplicht bij nacht: alleen onder echte straatlantaarns, voor de verlichte hoekpand-etalage en vóór de Porsche.
+      // 3. Lamplicht bij nacht: straatlantaarns, hoekpand-etalage, Monastic-wandlantaarn, ganglicht & Porsche-koplampen.
       if (!isBrandRuit) {
         float lp = klLamp(vP, n);
         if (lp > 0.001) {
@@ -326,7 +354,7 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         }
       }
 
-      // 3. Schemer: slanke, langgerekte handgetekende plassen met dunne inktrand en oranje luchtweerspiegeling.
+      // 4. Schemer: slanke, langgerekte handgetekende plassen met dunne inktrand en oranje luchtweerspiegeling.
       if (uPlassen > 0.5 && (s == ${id.straat} || s == ${id.parkeervak}) && abs(n.y) > 0.85) {
         float pf = klRuis(vec3(vP.x * 0.17 + 3.4, 1.3, vP.z * 0.38 - 1.2))
                  + 0.40 * klRuis(vec3(vP.x * 0.36 + 9.0, 2.7, vP.z * 0.52));
@@ -341,12 +369,10 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
 
       gl_FragColor = vec4(klNevel(k, length(cameraPosition - vP)), 1.0);
     }`,
-  // Beide kanten: een gespiegeld onderdeel in het model heeft zijn vlakken andersom. De vlakken liggen een
-  // fractie achter hun eigen lijnen, anders knippert de lijn.
   side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2,
 });
 
-// ---- Ronde vormen (kruinen, keien, de auto, mensen): zuivere tweetoons Hergé-vlakken zonder 3D-CGI glansstrepen!
+// ---- Ronde vormen (kruinen, keien, de auto): zuivere tweetoons Hergé-vlakken + koele maanrand bij nacht!
 const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: palet }, ...LICHT },
   vertexShader: `
@@ -377,24 +403,30 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
         : (vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32));
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
-      // Zuivere Hergé Ligne Claire auto-inkleuring (geen rommelige 3D-CGI glansstrepen!):
-      // rustige egale tweetoons lak met hooguit één kalme, vlakke lichtbaan langs de bovenste ronding.
+      // Zuivere Hergé Ligne Claire auto-inkleuring + strakke zilverblauwe maanlichtrand langs het dak & de motorkap!
       if (s == ${id.porsche} || s == ${id.autolak}) {
         float bovenGlans = smoothstep(0.74, 0.77, n.y) * (1.0 - smoothstep(0.92, 0.95, n.y));
-        vec3 hoogTint = uBunker > 0.5 ? vec3(0.24, 0.33, 0.42) : vec3(0.45, 0.62, 0.76);
-        k = mix(k, hoogTint, bovenGlans * 0.55);
+        vec3 hoogTint = uBunker > 0.5 ? vec3(0.28, 0.39, 0.50) : vec3(0.45, 0.62, 0.76);
+        k = mix(k, hoogTint, bovenGlans * 0.62);
+        if (uNacht > 0.5) {
+          float maanRand = smoothstep(0.32, 0.38, dot(n, uMaanDir)) * smoothstep(0.30, 0.38, n.y);
+          k = mix(k, vec3(0.44, 0.60, 0.74), maanRand * 0.42 * uNacht);
+        }
       } else if (s == ${id.autoraam}) {
-        // Strakke diagonale Hergé-glansstreep op de autoruiten (zoals op de blauwe taxi in Kuifje!)
         float diag = (vP.x + vP.z) * 1.45 + vP.y * 2.15;
         float g = fract(diag * 0.62);
         float fw = max(fwidth(diag * 0.62), 0.012);
         float streep1 = smoothstep(0.18 - fw, 0.18 + fw, g) * (1.0 - smoothstep(0.27 - fw, 0.27 + fw, g));
         float streep2 = smoothstep(0.31 - fw, 0.31 + fw, g) * (1.0 - smoothstep(0.35 - fw, 0.35 + fw, g));
         float streep = clamp(streep1 + streep2, 0.0, 1.0);
-        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.46, 0.60, 0.70) : vec3(0.92, 0.96, 0.99);
-        k = mix(k, ruitGlans, streep * 0.62);
+        vec3 ruitGlans = uBunker > 0.5 ? vec3(0.50, 0.65, 0.76) : vec3(0.92, 0.96, 0.99);
+        k = mix(k, ruitGlans, streep * 0.65);
       } else if (s == ${id.blad_a} || s == ${id.blad_b} || s == ${id.blad_c}) {
-        // Spaarzame, fijne Hergé-bladboogjes in de kruinen (geen drukke ruis).
+        // Koele maanlichtrand op de bovenkant van boomkruinen gericht naar de maan
+        if (uNacht > 0.5 && n.y > 0.36 && dot(n, uMaanDir) > 0.28) {
+          k = mix(k, vec3(0.26, 0.40, 0.35), 0.48 * uNacht);
+        }
+        // Spaarzame, fijne Hergé-bladboogjes in de kruinen
         float dist = length(cameraPosition - vP);
         if (licht && n.y > 0.14 && dist < 58.0) {
           vec3 cel = floor(vP * 0.85);
@@ -412,7 +444,6 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
           }
         }
       } else if (s == ${id.lamp}) {
-        // Echte 3D-koplamp achter het glas van de Porsche: warm gloeiend bij nacht, helder koplampglas overdag.
         k = uBrandt > 0.5 ? vec3(1.0, 0.95, 0.65) : vec3(0.86, 0.90, 0.93);
       }
 
@@ -611,7 +642,7 @@ const luchtShader = () => new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, depthTest: true,
 });
 
-let palet, vakNamen, lijn, pLijnMat = null, rand, lucht, wolken = [], wolkBasis = [], lampen = [], maan = null, lampGlasMat = null, lampPitMat = null, bladeren = null, bladData = [], slagMat, lijnMaat = 1;
+let palet, vakNamen, lijn, pLijnMat = null, rand, lucht, wolken = [], wolkBasis = [], lampen = [], lampKegels = [], lampKegelMat = null, maan = null, lampGlasMat = null, lampPitMat = null, slagMat, lijnMaat = 1;
 let stijlNaam = 'bunker', lichtNaam = 'nacht';
 const slagDoel = new THREE.WebGLRenderTarget(SLAGMAAT, SLAGMAAT, { depthTexture: new THREE.DepthTexture(SLAGMAAT, SLAGMAAT, THREE.UnsignedIntType) });
 slagDoel.depthTexture.minFilter = slagDoel.depthTexture.magFilter = THREE.NearestFilter;
@@ -740,6 +771,8 @@ function pasKleurToe(a, b, t) {
     const br = LICHT.uBrandt.value;
     lampPitMat.color.setRGB(0.85 + 0.15 * br, 0.88 + 0.08 * br, 0.90 - 0.22 * br);
   }
+  if (lampKegelMat) lampKegelMat.uniforms.uAan.value = LICHT.uBrandt.value;
+  LICHT.uGangLicht.value = gangLichtAan * LICHT.uBrandt.value;
   if (intercom && !intro) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
   if (porsche) porsche.zetLicht(LICHT.uBrandt.value, LICHT.uInktKleur.value, lichtNaam);
 }
@@ -755,6 +788,7 @@ function kleur(naam, licht, meteen = false) {
   lijnMaat = doel.lijnMaat;
   wolken.forEach((w, i) => { w.material.map = wolkBeeld(st, i % 3, !!sm.nacht); w.visible = sm.wolken; });
   for (const l of lampen) l.visible = sm.brandt;
+  for (const k of lampKegels) k.visible = sm.brandt;
   if (maan) maan.visible = !!sm.nacht;
   if (sm.lamplicht) zet(LICHT.uLampKleur.value, sm.lamplicht);
   if (vogels) vogels.group.visible = !sm.brandt;
@@ -814,20 +848,24 @@ function wolkBeeld(st, soort = 0, nacht = false) {
   let zaad = 7;
   const kans = () => (zaad = (zaad * 16807) % 2147483647) / 2147483647;
   if (nacht) {
-    // Nachtwolken uit Claude's g-klare-lijn: lange, dunne flarden, donkerblauw met lichtere maanrand.
+    // Nachtwolken in echte Hergé-stijl: lange slanke flarden met een heldere zilver-crème maanlichtrand!
     zaad = 11 + soort * 97;
     const flard = (x0, x1, y, dik, kleur_) => {
       g.fillStyle = kleur_;
       g.beginPath();
       g.moveTo(x0, y);
-      for (let i = 1; i <= 6; i++) g.quadraticCurveTo(x0 + (x1 - x0) * (i - 0.5) / 6, y - dik * (0.5 + kans() * 0.9), x0 + (x1 - x0) * i / 6, y - (i < 6 ? dik * 0.25 * kans() : 0));
-      for (let i = 5; i >= 0; i--) g.quadraticCurveTo(x0 + (x1 - x0) * (i + 0.5) / 6, y + dik * (0.4 + kans() * 0.7), x0 + (x1 - x0) * i / 6, y + (i > 0 ? dik * 0.2 * kans() : 0));
+      for (let i = 1; i <= 6; i++) g.quadraticCurveTo(x0 + (x1 - x0) * (i - 0.5) / 6, y - dik * (0.5 + kans() * 0.85), x0 + (x1 - x0) * i / 6, y - (i < 6 ? dik * 0.22 * kans() : 0));
+      for (let i = 5; i >= 0; i--) g.quadraticCurveTo(x0 + (x1 - x0) * (i + 0.5) / 6, y + dik * (0.4 + kans() * 0.65), x0 + (x1 - x0) * i / 6, y + (i > 0 ? dik * 0.18 * kans() : 0));
       g.fill();
     };
-    for (const [x0, x1, y, dik] of [[60, 900, 150, 26], [220, 1000, 235, 20], [30, 640, 310, 16]]) {
-      const s = (kans() - 0.5) * 60;
-      flard(x0 + s, x1 + s, y, dik, '#42596f');
-      flard(x0 + s + 6, x1 + s - 4, y + 7, dik * 0.86, '#2b3c50');
+    for (const [x0, x1, y, dik] of [[60, 900, 148, 28], [210, 990, 232, 22], [35, 650, 308, 17]]) {
+      const s = (kans() - 0.5) * 55;
+      // 1. Dunne heldere maanlicht-reflectierand langs de onder-/bovenzijde (zoals op de referentieplaat!)
+      flard(x0 + s + 10, x1 + s - 8, y + 6, dik * 0.94, '#b8cde0');
+      // 2. Zilverblauwe middenband (gevangen maanlicht)
+      flard(x0 + s + 4, x1 + s - 4, y + 1, dik * 0.96, '#4c657d');
+      // 3. Donkere middernacht-wolkkern zodat de maanrand er vlijmscherp uitspringt
+      flard(x0 + s + 8, x1 + s - 12, y - 3, dik * 0.80, '#27384b');
     }
   } else if (st.wolkvorm === 'gouache') {
     const bollen = [[155, 250, 72], [265, 212, 98], [405, 185, 124], [565, 202, 112], [705, 232, 92], [825, 252, 72], [912, 266, 52]]
@@ -882,23 +920,24 @@ function wolkBeeld(st, soort = 0, nacht = false) {
   return t;
 }
 
-// De maan uit Claude's g-klare-lijn: een sikkel met zachte koelblauwe hof en aardeschijn.
+// De maansikkel met zachte zilverblauwe hof en aardeschijn (licht helder op boven het kantoor en de wolken).
 function maanBeeld() {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const g = c.getContext('2d');
-  const hof = g.createRadialGradient(128, 128, 30, 128, 128, 126);
-  hof.addColorStop(0, 'rgba(150, 175, 205, 0.34)');
-  hof.addColorStop(1, 'rgba(150, 175, 205, 0)');
+  const hof = g.createRadialGradient(128, 128, 28, 128, 128, 126);
+  hof.addColorStop(0, 'rgba(182, 208, 232, 0.44)');
+  hof.addColorStop(0.5, 'rgba(140, 172, 206, 0.16)');
+  hof.addColorStop(1, 'rgba(140, 172, 206, 0)');
   g.fillStyle = hof;
   g.fillRect(0, 0, 256, 256);
-  g.fillStyle = '#f4edc6';
-  g.beginPath(); g.arc(128, 128, 36, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#faf3ca';
+  g.beginPath(); g.arc(128, 128, 38, 0, Math.PI * 2); g.fill();
   g.globalCompositeOperation = 'destination-out';
-  g.beginPath(); g.arc(143, 121, 33, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(144, 120, 34, 0, Math.PI * 2); g.fill();
   g.globalCompositeOperation = 'source-over';
-  g.fillStyle = 'rgba(120, 142, 172, 0.30)';
-  g.beginPath(); g.arc(143, 121, 33, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(116, 144, 176, 0.28)';
+  g.beginPath(); g.arc(144, 120, 34, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -1119,26 +1158,31 @@ function bouwChapeauHerstel(vlakMat, lijnMat, id) {
   return { vlakMesh, lijnMesh };
 }
 
-// ---- Splits de Porsche 930 Turbo (koets + 4 losse draaiende wielen op exacte as-middenpunten) uit het dorp.
+// ---- Splits de Porsche 930 Turbo (koets + 4 exact gecentreerde, rechtgezette wielen) uit het dorp.
+// De voorwielen stonden in het Blender-model +19° ingestuurd; (ax, az) heft die ingebakken hoek op zodat elk wiel
+// kaarsrecht om zijn eigen as draait zonder te slingeren en pas tijdens het rijden vloeiend meestuurt!
 const WIEL_ASSEN = [
-  { naam: 'FL', x: 0.743, y: 0.327, z: 1.319, voor: true },
-  { naam: 'FR', x: -0.769, y: 0.326, z: 1.297, voor: true },
-  { naam: 'RL', x: 0.771, y: 0.325, z: -0.962, voor: false },
-  { naam: 'RR', x: -0.778, y: 0.327, z: -0.969, voor: false },
+  { naam: 'FL', x: 0.7446, y: 0.3250, z: 1.3231, ax: 0.9459, az: 0.3244, voor: true },
+  { naam: 'FR', x: -0.7722, y: 0.3251, z: 1.2960, ax: 0.9456, az: 0.3255, voor: true },
+  { naam: 'RL', x: 0.7734, y: 0.3251, z: -0.9629, ax: 1.0, az: 0.0, voor: false },
+  { naam: 'RR', x: -0.7818, y: 0.3251, z: -0.9698, ax: 1.0, az: 0.0, voor: false },
 ];
 const WIEL_STRAAL = 0.315;
 
-function wielIndex(lx, ly, lz) {
+function wielIndex(lx, ly, lz, maxR = 0.338, maxHalfW = 0.155) {
   if (Math.abs(lx) < 0.50 || ly > 0.67) return -1;
   for (let w = 0; w < 4; w++) {
     const a = WIEL_ASSEN[w];
     if ((a.x > 0) !== (lx > 0)) continue;
-    if (Math.hypot(ly - a.y, lz - a.z) < 0.355) return w;
+    const dx = lx - a.x, dy = ly - a.y, dz = lz - a.z;
+    const wx = dx * a.ax + dz * a.az;
+    const wz = -dx * a.az + dz * a.ax;
+    if (Math.abs(wx) < maxHalfW && Math.hypot(dy, wz) < maxR) return w;
   }
   return -1;
 }
 
-function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
+function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot, autowielSlot, metaalSlot) {
   const inBox = (x, y, z) => x > -27.32 && x < -24.35 && z > 19.55 && z < 24.05 && y > 0.02 && y < 1.38;
   const cx = -25.765, cz = 21.728, yOff = 0.02;
   const fx = -0.338, fz = 0.941;
@@ -1153,8 +1197,13 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
     const my = (rPos[i + 1] + rPos[i + 4] + rPos[i + 7]) / 3;
     const mz = (rPos[i + 2] + rPos[i + 5] + rPos[i + 8]) / 3;
     if (!inBox(mx, my, mz)) { pTriTag[t] = -2; tel.stat++; continue; }
-    const dx = mx - cx, dz = mz - cz;
-    const wi = wielIndex(dx * rx + dz * rz, my - yOff, dx * fx + dz * fz);
+    const s = rVak[t * 6];
+    let wi = -1;
+    // Uitsluitend banden ('autowiel') en velgen ('metaal') horen bij de wielen: spatbordlak blijft 100% vast op de koets!
+    if (s === autowielSlot || s === metaalSlot) {
+      const dx = mx - cx, dz = mz - cz;
+      wi = wielIndex(dx * rx + dz * rz, my - yOff, dx * fx + dz * fz, 0.342, 0.165);
+    }
     pTriTag[t] = wi;
     if (wi >= 0) tel.wiel[wi]++; else tel.koets++;
   }
@@ -1174,9 +1223,9 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
       continue;
     }
     const doel = tag >= 0 ? wielB[tag] : koetsB;
-    const ox = tag >= 0 ? WIEL_ASSEN[tag].x : 0;
-    const oy = tag >= 0 ? WIEL_ASSEN[tag].y : 0;
-    const oz = tag >= 0 ? WIEL_ASSEN[tag].z : 0;
+    const as = tag >= 0 ? WIEL_ASSEN[tag] : null;
+    const ox = as ? as.x : 0, oy = as ? as.y : 0, oz = as ? as.z : 0;
+    const ax = as ? as.ax : 1, az = as ? as.az : 0;
     const pi = doel.i++;
     let sumX = 0, sumY = 0, sumZ = 0;
     for (let k = 0; k < 3; k++) {
@@ -1185,14 +1234,17 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
       const lx = dx * rx + dz * rz;
       const ly = rPos[src + 1] - yOff;
       const lz = dx * fx + dz * fz;
-      doel.rPos[dst] = lx - ox;
-      doel.rPos[dst + 1] = ly - oy;
-      doel.rPos[dst + 2] = lz - oz;
+      const px = lx - ox, py = ly - oy, pz = lz - oz;
+      // Roteer voorwielen kaarsrecht rond de wielas (-19° opheffen) zodat elk wiel 100% rond zonder slag draait!
+      doel.rPos[dst] = px * ax + pz * az;
+      doel.rPos[dst + 1] = py;
+      doel.rPos[dst + 2] = -px * az + pz * ax;
       sumX += lx; sumY += ly; sumZ += lz;
       const nx = rNor[src], ny = rNor[src + 1], nz = rNor[src + 2];
-      doel.rNor[dst] = Math.max(-127, Math.min(127, Math.round(nx * rx + nz * rz)));
+      const lnx = nx * rx + nz * rz, lnz = nx * fx + nz * fz;
+      doel.rNor[dst] = Math.max(-127, Math.min(127, Math.round(lnx * ax + lnz * az)));
       doel.rNor[dst + 1] = ny;
-      doel.rNor[dst + 2] = Math.max(-127, Math.min(127, Math.round(nx * fx + nz * fz)));
+      doel.rNor[dst + 2] = Math.max(-127, Math.min(127, Math.round(-lnx * az + lnz * ax)));
       const vs = (t * 3 + k) * 2, vd = (pi * 3 + k) * 2;
       doel.rVak[vd] = rVak[vs]; doel.rVak[vd + 1] = rVak[vs + 1];
     }
@@ -1202,7 +1254,7 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
     }
   }
 
-  // Splits ook de vector-inktlijnen (filter drukke micro-roosterlijntjes < 0.055 m weg voor zuiverdere Hergé-look!)
+  // Splits ook de vector-inktlijnen (strak binnen de ongedraaide wielcilinder zodat spatbordlijnen op de koets blijven!)
   const lCount = lPos.length / 6;
   const pLTag = new Int8Array(lCount); // -3 = weggooien (micro-clutter), -2 = dorp, -1 = koets, 0..3 = wiel
   const lTel = { stat: 0, koets: 0, wiel: [0, 0, 0, 0] };
@@ -1216,8 +1268,7 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
     }
     const mx = (x0 + x1) * 0.5, my = (y0 + y1) * 0.5, mz = (z0 + z1) * 0.5;
     const dx = mx - cx, dz = mz - cz;
-    const wi = wielIndex(dx * rx + dz * rz, my - yOff, dx * fx + dz * fz);
-    // Filter piepkleine achterruit-roosterlijntjes (< 0.052 m op koets) zodat de Porsche strakker Kuifje-stijl oogt
+    const wi = wielIndex(dx * rx + dz * rz, my - yOff, dx * fx + dz * fz, 0.324, 0.140);
     if (wi < 0 && L < 0.052) { pLTag[i] = -3; continue; }
     pLTag[i] = wi;
     if (wi >= 0) lTel.wiel[wi]++; else lTel.koets++;
@@ -1239,21 +1290,25 @@ function splitsPorsche(rPos, rNor, rVak, lPos, lN, lEig, witSlot, lampSlot) {
       continue;
     }
     const doel = tag >= 0 ? wielL[tag] : koetsL;
-    const ox = tag >= 0 ? WIEL_ASSEN[tag].x : 0;
-    const oy = tag >= 0 ? WIEL_ASSEN[tag].y : 0;
-    const oz = tag >= 0 ? WIEL_ASSEN[tag].z : 0;
+    const as = tag >= 0 ? WIEL_ASSEN[tag] : null;
+    const ox = as ? as.x : 0, oy = as ? as.y : 0, oz = as ? as.z : 0;
+    const ax = as ? as.ax : 1, az = as ? as.az : 0;
     const pli = doel.i++;
     for (let e = 0; e < 2; e++) {
       const src = i * 6 + e * 3, dst = pli * 6 + e * 3;
       const dx = lPos[src] - cx, dz = lPos[src + 2] - cz;
-      doel.lPos[dst] = dx * rx + dz * rz - ox;
-      doel.lPos[dst + 1] = lPos[src + 1] - yOff - oy;
-      doel.lPos[dst + 2] = dx * fx + dz * fz - oz;
+      const px = dx * rx + dz * rz - ox;
+      const py = lPos[src + 1] - yOff - oy;
+      const pz = dx * fx + dz * fz - oz;
+      doel.lPos[dst] = px * ax + pz * az;
+      doel.lPos[dst + 1] = py;
+      doel.lPos[dst + 2] = -px * az + pz * ax;
       const ns = i * 8 + e * 4, nd = pli * 8 + e * 4;
       const nx = lN[ns], ny = lN[ns + 1], nz = lN[ns + 2];
-      doel.lN[nd] = Math.max(-127, Math.min(127, Math.round(nx * rx + nz * rz)));
+      const lnx = nx * rx + nz * rz, lnz = nx * fx + nz * fz;
+      doel.lN[nd] = Math.max(-127, Math.min(127, Math.round(lnx * ax + lnz * az)));
       doel.lN[nd + 1] = ny;
-      doel.lN[nd + 2] = Math.max(-127, Math.min(127, Math.round(nx * fx + nz * fz)));
+      doel.lN[nd + 2] = Math.max(-127, Math.min(127, Math.round(-lnx * az + lnz * ax)));
       doel.lN[nd + 3] = 0;
     }
     doel.lEig.set(lEig.subarray(i * 3, i * 3 + 3), pli * 3);
@@ -1426,7 +1481,48 @@ function bouwLijnMesh(lPos, lN, lEig, lijnMat) {
   return mesh;
 }
 
-// ---- De strakke Ligne Claire Porsche 930 Turbo met 4 écht draaiende & sturende wielen en 100% op-de-weg route!
+// ---- Volumetrische 3D-lichtkegel door de nachtlucht (zachte Fresnel-rand zonder harde 3D-hoeken, zoals op de Kuifje-plaat!).
+function maakLichtKegelMat(kleurHex = 0xf8e98c, basisSterkte = 0.26) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uKleur: { value: new THREE.Color(kleurHex) },
+      uSterkte: { value: basisSterkte },
+      uAan: { value: 0.0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vNorm;
+      varying vec3 vView;
+      void main() {
+        vUv = uv;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNorm = normalize(normalMatrix * normal);
+        vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform vec3 uKleur;
+      uniform float uSterkte;
+      uniform float uAan;
+      varying vec2 vUv;
+      varying vec3 vNorm;
+      varying vec3 vView;
+      void main() {
+        // vUv.y = 1 bij de lamp (smalle top), 0 aan het brede uiteinde
+        float langs = pow(clamp(vUv.y, 0.0, 1.0), 1.45) * smoothstep(1.0, 0.90, vUv.y);
+        float zachtRand = pow(abs(dot(normalize(vNorm), normalize(vView))), 1.35);
+        float a = langs * zachtRand * uSterkte * uAan;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(uKleur, a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+// ---- De strakke Ligne Claire Porsche 930 Turbo met 4 rechtgezette, écht draaiende wielen,
+//      volumetrische koplampkegels door de lucht, vloeiende inparkeerroute en Kuifje-bewegingsstrepen!
 function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   const group = new THREE.Group();
   const chassis = new THREE.Group();
@@ -1440,7 +1536,7 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   chassis.add(pRandMesh, pRompMesh);
   if (pData.lPos.length) chassis.add(bouwLijnMesh(pData.lPos, pData.lN, pData.lEig, lijnMat));
 
-  // 2. De 4 losse draaiende wielen (FL/FR sturen ook mee in bochten!)
+  // 2. De 4 losse rechtgezette wielen (draaien zuiver rond hun exacte wielas; FL/FR sturen soepel mee!)
   const wielGroepen = pData.wielen.map((w) => {
     const stuurG = new THREE.Group();
     stuurG.position.set(w.as.x, w.as.y, w.as.z);
@@ -1465,8 +1561,14 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   schaduw.renderOrder = 2;
   group.add(schaduw);
 
-  // Zachte warme lichthof direct op de echte 3D-koplampen + 930 Turbo achterlichtbalk.
+  // Zachte warme lichthof direct op de 3D-koplampen + 3D volumetrische lichtkegels door de nachtlucht!
   const kopGloedSprites = [];
+  const kopKegelMat = maakLichtKegelMat(0xf7ea92, 0.30);
+  const kegelGeo = new THREE.CylinderGeometry(0.11, 1.08, 7.2, 18, 1, true);
+  // Verplaats kegel zodat de smalle top (y = +L/2) precies op de lamp zit en hij naar +Z (iets omlaag) schijnt!
+  kegelGeo.translate(0, -3.6, 0);
+  kegelGeo.rotateX(-Math.PI / 2 + 0.095);
+  const kopKegels = [];
   for (const lx of [-0.655, 0.623]) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: gloedTex, depthWrite: false, fog: false, transparent: true, opacity: 0.0 }));
     sp.position.set(lx, 0.642, 1.94);
@@ -1475,6 +1577,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
     sp.visible = false;
     chassis.add(sp);
     kopGloedSprites.push(sp);
+
+    const kg = new THREE.Mesh(kegelGeo, kopKegelMat);
+    kg.position.set(lx, 0.642, 1.93);
+    kg.renderOrder = 11;
+    kg.visible = false;
+    chassis.add(kg);
+    kopKegels.push(kg);
   }
   const achterMat = new THREE.MeshBasicMaterial({ color: 0xc92c24, transparent: true, opacity: 0.0 });
   const achterBalk = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.068), achterMat);
@@ -1483,60 +1592,117 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
   achterBalk.renderOrder = 11;
   chassis.add(achterBalk);
 
-  // 100% op de kaart geverifieerde route pal midden over het asfalt (nul stoep, nul bomen, nul heg!):
-  // Torenlaan -> kruising -> Meentweg -> ruime inrit naar het Monastic-erf (grindhoogte y=0.085).
+  // 100% op de kaart geverifieerde route pal midden over het asfalt + vloeiende, volledig natuurlijke inrit op het erf!
+  // Geen enkele plotse 90°-draai meer: de laatste 3 punten lopen kalm rechtuit het grind op naar de voordeur van Monastic.
   const route = new THREE.CatmullRomCurve3([
     new THREE.Vector3(-44.0, 0.0, 50.0),   // Torenlaan midden op het asfalt
     new THREE.Vector3(-34.0, 0.0, 41.5),   // Torenlaan richting de kruising
     new THREE.Vector3(-24.5, 0.0, 31.5),   // De kruising langs handwijzer & straatlantaarn
-    new THREE.Vector3(-15.5, 0.0, 28.5),   // Vrij over het brede kruispunt (ruim zuid van hoekboom)
+    new THREE.Vector3(-15.5, 0.0, 28.5),   // Vrij over het brede kruispunt
     new THREE.Vector3(-6.0, 0.0, 27.5),    // Midden op de kruising
     new THREE.Vector3(2.5, 0.0, 22.0),     // Soepele bocht de Meentweg op
     new THREE.Vector3(11.0, 0.0, 14.8),    // Midden op het asfalt van de Meentweg
     new THREE.Vector3(19.0, 0.0, 9.0),     // Langs de Meentweg richting de inrit
-    new THREE.Vector3(26.2, 0.0, 4.4),     // Voorbij de heg & lantaarn (22.95, 1.05)
-    new THREE.Vector3(27.0, 0.02, 0.2),    // Ruime bocht de Monastic-oprit in
-    new THREE.Vector3(22.2, 0.085, -2.4),  // Over het grind het erf op
-    new THREE.Vector3(14.2, 0.085, -1.0),  // Tot stilstand op de oprit voor het bakstenen pand!
+    new THREE.Vector3(25.6, 0.0, 4.4),     // Voorbij de heg & lantaarn
+    new THREE.Vector3(25.8, 0.02, 0.4),    // Ruime, geleidelijke bocht de Monastic-oprit in
+    new THREE.Vector3(21.2, 0.085, -1.6),  // Recht over het grind het erf op
+    new THREE.Vector3(17.4, 0.085, -1.60), // Rustig afremmend in rechte lijn naar het pand
+    new THREE.Vector3(14.9, 0.085, -1.45), // Natuurlijke stilstand vóór Monastic met ruimte tot de deurmat!
   ]);
   const routeLengte = route.getLength();
 
+  // Kuifje-bewegingsstrepen (4 vloeiende linten langs de werkelijke rijlijn achter de rijdende Porsche!).
+  // Verschijnen subtiel bij vaart over de Torenlaan/kruising en verdwijnen 100% zodra de auto afremt voor de oprit!
+  const streepGroep = new THREE.Group();
+  const ST_SEG = 10;
+  const streepSpecs = [
+    { zij: -0.76, y: 0.24, breed: 0.055, lengte: 0.044, kleur: 0xdce1cf, maxOp: 0.42 }, // lichte luchtveeg linksonder
+    { zij:  0.74, y: 0.20, breed: 0.050, lengte: 0.038, kleur: 0xdce1cf, maxOp: 0.38 }, // lichte luchtveeg rechtsonder
+    { zij: -0.84, y: 0.56, breed: 0.028, lengte: 0.034, kleur: 0x070a0e, maxOp: 0.46 }, // fijne Kuifje inktstreep links
+    { zij:  0.80, y: 0.62, breed: 0.026, lengte: 0.030, kleur: 0x070a0e, maxOp: 0.42 }, // fijne Kuifje inktstreep rechts
+  ];
+  const streepLijst = streepSpecs.map((sp) => {
+    const pos = new Float32Array((ST_SEG + 1) * 2 * 3);
+    const idx = [];
+    for (let i = 0; i < ST_SEG; i++) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      idx.push(a, b, c, b, d, c);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    const mat = new THREE.MeshBasicMaterial({
+      color: sp.kleur, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 9;
+    streepGroep.add(mesh);
+    return { sp, pos, geo, mat, mesh };
+  });
+
   const tmpPos = new THREE.Vector3(), tmpVoor = new THREE.Vector3(), tmpAchter = new THREE.Vector3();
+  const tmpP1 = new THREE.Vector3(), tmpP2 = new THREE.Vector3();
   const d1 = new THREE.Vector3(), d2 = new THREE.Vector3();
   let motorLicht = 1.0, laatsteBrandt = 0;
 
   // Vloeiend snelheidsprofiel: vlot over de Torenlaan en Meentweg, dan kalm afremmend de oprit op.
   const voortgang = (t) => {
     const c = Math.max(0, Math.min(1, t));
-    if (c < 0.74) {
-      const k = c / 0.74;
-      return 0.78 * (0.10 * k * k + 0.90 * k);
+    if (c < 0.72) {
+      const k = c / 0.72;
+      return 0.76 * (0.08 * k * k + 0.92 * k);
     }
-    const k = (c - 0.74) / 0.26;
-    return 0.78 + 0.22 * (1 - Math.pow(1 - k, 2.8));
+    const k = (c - 0.72) / 0.28;
+    return 0.76 + 0.24 * (1 - Math.pow(1 - k, 2.6));
   };
 
   const kopNeusWereld = new THREE.Vector3(), kopRichtWereld = new THREE.Vector3();
-  const zetOp = (u, snelheid, bocht, remmen) => {
-    const uc = Math.max(0.001, Math.min(0.9999, u));
-    route.getPointAt(uc, tmpPos);
-    route.getPointAt(Math.min(0.9999, uc + 0.004), tmpVoor);
-    if (uc > 0.992) {
-      const bl = Math.min(1, (uc - 0.992) / 0.008);
-      const tx = tmpVoor.x - tmpPos.x, tz = tmpVoor.z - tmpPos.z;
-      const tl = Math.hypot(tx, tz) || 1;
-      const fx = (tx / tl) * (1 - bl) + (-0.62) * bl;
-      const fz = (tz / tl) * (1 - bl) + (-0.78) * bl;
-      tmpVoor.set(tmpPos.x + fx, tmpPos.y, tmpPos.z + fz);
+  const werkStrepBij = (uc, snelheid) => {
+    // Alleen zichtbaar wanneer de Porsche flink doorrijdt (Torenlaan/kruising) en weg ruim vóór het inparkeren!
+    const vaart = Math.max(0, Math.min(1, (snelheid - 0.52) / 0.48)) * (uc < 0.78 ? 1 : Math.max(0, 1 - (uc - 0.78) / 0.08));
+    streepGroep.visible = vaart > 0.02 && group.visible;
+    if (!streepGroep.visible) return;
+    for (const st of streepLijst) {
+      st.mat.opacity = st.sp.maxOp * vaart;
+      const startU = Math.max(0.002, uc - 0.017); // direct achter de achterbumper (ca. 2,1 m)
+      const lenU = st.sp.lengte * (0.55 + 0.45 * vaart);
+      for (let i = 0; i <= ST_SEG; i++) {
+        const f = i / ST_SEG;
+        const ui = Math.max(0.0005, startU - f * lenU);
+        const ui2 = Math.min(0.9999, ui + 0.004);
+        route.getPointAt(ui, tmpP1);
+        route.getPointAt(ui2, tmpP2);
+        const tx = tmpP2.x - tmpP1.x, tz = tmpP2.z - tmpP1.z;
+        const tl = Math.hypot(tx, tz) || 1;
+        // Rechts-vector loodrecht op de rijrichting
+        const rx = -tz / tl, rz = tx / tl;
+        const tap = Math.sin(f * Math.PI) * (1 - f * 0.35);
+        const hw = st.sp.breed * (0.25 + 0.75 * tap);
+        const cx = tmpP1.x + rx * (st.sp.zij + f * 0.08 * Math.sign(st.sp.zij));
+        const cz = tmpP1.z + rz * (st.sp.zij + f * 0.08 * Math.sign(st.sp.zij));
+        const cy = tmpP1.y + st.sp.y + f * 0.04;
+        const o = i * 6;
+        st.pos[o] = cx - rx * hw; st.pos[o + 1] = cy; st.pos[o + 2] = cz - rz * hw;
+        st.pos[o + 3] = cx + rx * hw; st.pos[o + 4] = cy; st.pos[o + 5] = cz + rz * hw;
+      }
+      st.geo.attributes.position.needsUpdate = true;
     }
+  };
+
+  const zetOp = (u, snelheid, bocht, remmen) => {
+    const uc = Math.max(0.001, Math.min(0.9995, u));
+    route.getPointAt(uc, tmpPos);
+    route.getPointAt(Math.min(0.9999, uc + 0.0035), tmpVoor);
     group.position.copy(tmpPos);
     group.lookAt(tmpVoor);
-    chassis.rotation.z = THREE.MathUtils.clamp(bocht * 0.75, -0.055, 0.055);
-    chassis.rotation.x = THREE.MathUtils.clamp(remmen * 0.022 - snelheid * 0.006, -0.015, 0.026);
+    chassis.rotation.z = THREE.MathUtils.clamp(bocht * 0.60, -0.045, 0.045);
+    chassis.rotation.x = THREE.MathUtils.clamp(remmen * 0.020 - snelheid * 0.005, -0.012, 0.024);
 
-    // Draai alle 4 de wielen exact op basis van de afgelegde meters + stuur de voorwielen mee!
+    // Draai alle 4 de rechtgezette wielen exact op basis van de afgelegde meters + soepele stuurhoek die bij stilstand naar 0 gaat!
     const rolHoek = (uc * routeLengte) / WIEL_STRAAL;
-    const stuurHoek = THREE.MathUtils.clamp(-bocht * 2.2, -0.42, 0.42);
+    const stuurFactor = Math.max(0, Math.min(1, snelheid / 0.22));
+    const stuurHoek = THREE.MathUtils.clamp(-bocht * 1.65, -0.32, 0.32) * stuurFactor;
     for (const w of wielGroepen) {
       w.rolG.rotation.x = rolHoek;
       if (w.voor) w.stuurG.rotation.y = stuurHoek;
@@ -1547,12 +1713,13 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
     kopRichtWereld.set(0, 0, 1).transformDirection(group.matrixWorld).setY(0).normalize();
     LICHT.uKopPos.value.copy(kopNeusWereld);
     LICHT.uKopDir.value.copy(kopRichtWereld);
+    werkStrepBij(uc, snelheid);
   };
 
   zetOp(1.0, 0, 0, 0);
 
   return {
-    group, route,
+    group, streepGroep, route,
     zetIntroStand(tNorm) {
       const u = voortgang(tNorm);
       const uPrev = voortgang(Math.max(0, tNorm - 0.015));
@@ -1563,18 +1730,20 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
       route.getPointAt(Math.min(0.999, u + 0.02), tmpVoor);
       d1.subVectors(tmpPos, tmpAchter).normalize();
       d2.subVectors(tmpVoor, tmpPos).normalize();
-      const bocht = (d1.x * d2.z - d1.z * d2.x) * Math.min(1.5, snelheid);
-      const remmen = tNorm > 0.74 && tNorm < 0.99 ? Math.sin(((tNorm - 0.74) / 0.25) * Math.PI) : 0;
+      const bocht = (d1.x * d2.z - d1.z * d2.x) * Math.min(1.4, snelheid);
+      const remmen = tNorm > 0.72 && tNorm < 0.99 ? Math.sin(((tNorm - 0.72) / 0.27) * Math.PI) : 0;
       zetOp(u, snelheid, bocht, remmen);
     },
     zetLicht(brandt, inktKleur) {
       laatsteBrandt = brandt;
       const eff = brandt * motorLicht;
       LICHT.uKopAan.value = eff;
+      kopKegelMat.uniforms.uAan.value = eff;
       for (const sp of kopGloedSprites) {
         sp.visible = eff > 0.04;
         sp.material.opacity = eff * 0.92;
       }
+      for (const kg of kopKegels) kg.visible = eff > 0.04;
       achterMat.opacity = eff * 0.92;
       schaduwMat.color.copy(inktKleur);
     },
@@ -1582,10 +1751,12 @@ function bouwPorscheLeven(pData, rompMat, randMat, lijnMat, gloedTex) {
       motorLicht = Math.max(0, Math.min(1, factor));
       const eff = laatsteBrandt * motorLicht;
       LICHT.uKopAan.value = eff;
+      kopKegelMat.uniforms.uAan.value = eff;
       for (const sp of kopGloedSprites) {
         sp.visible = eff > 0.04;
         sp.material.opacity = eff * 0.92;
       }
+      for (const kg of kopKegels) kg.visible = eff > 0.04;
       achterMat.opacity = eff * 0.92;
     },
     positie(uit) { return uit.copy(group.position); },
@@ -1659,57 +1830,147 @@ function stopRondleiding() {
 
 const kaderEl = document.querySelector('.kader');
 const celLaagEl = document.getElementById('cel-laag');
+const celDeurLaagEl = document.getElementById('cel-deur-laag');
 const bijschriftEl = document.getElementById('strip-bijschrift');
+const ballonEl = document.getElementById('strip-ballon');
+const ballonSprekerEl = document.getElementById('ballon-spreker');
+const ballonTekstEl = document.getElementById('ballon-tekst');
+const keuzeEl = document.getElementById('verhaal-keuze');
 const overslaanKnop = document.getElementById('overslaan-knop');
 
-function zetRegieUI(inRegie, toonCel = false, bijschrift = '') {
+// Het interactieve Kuifje-verhaal "Het Geheim van de Meentweg" — drie dossiers gekoppeld aan het echte aanbod van Monastic.
+const DOSSIERS = {
+  website: {
+    label: 'Dossier I',
+    titel: 'De Nieuwe Website',
+    sub: 'Eigen ontwerp, vaste prijs vanaf € 1.450',
+    reactie: '“Geen standaard sjabloon, wel een vaste prijs. Precies wat deze zaak nodig heeft!”',
+    maker: '“Goedenavond! Een eigen ontwerp voor een vaste prijs — kom verder, dan zetten we de eerste lijnen op papier.”',
+    url: 'https://monastic.nl/websites/',
+    urlLabel: 'Bekijk website-pakketten ↗',
+  },
+  wordpress: {
+    label: 'Dossier II',
+    titel: 'De WordPress-Zaak',
+    sub: 'Check met herstel (€ 249) of overstappen',
+    reactie: '“Drieëntwintig plugins en een kier in de achterdeur… hoog tijd dat de maker kijkt!”',
+    maker: '“Aha, een WordPress-dossier! Geen zorgen: binnen vijf dagen heb je een helder rapport, of we stappen over.”',
+    url: 'https://monastic.nl/wordpress/',
+    urlLabel: 'Bekijk de WordPress-check ↗',
+  },
+  ai3d: {
+    label: 'Dossier III',
+    titel: 'AI & 3D-Maatwerk',
+    sub: 'AI-kansenscan (€ 495) of interactieve 3D',
+    reactie: '“Een heel dorp in de browser — als zij dát bouwen, kunnen ze onze zaak ook oplossen!”',
+    maker: '“Spannend dossier! Of het nu een AI-kansenscan of 3D-maatwerk wordt — hier spreek je rechtstreeks met de maker.”',
+    url: 'https://monastic.nl/websites/',
+    urlLabel: 'Bekijk AI-scan & maatwerk ↗',
+  },
+};
+
+let laatsteBallonSleutel = '';
+let laatsteKeuzeSleutel = '';
+let actieveKeuzeActies = [];
+
+function toonBallon(sprekerCode, sprekerNaam, tekst) {
+  if (!ballonEl) return;
+  const sl = `${sprekerCode}|${tekst}`;
+  if (!tekst) {
+    ballonEl.hidden = true;
+    laatsteBallonSleutel = '';
+    return;
+  }
+  if (sl !== laatsteBallonSleutel) {
+    laatsteBallonSleutel = sl;
+    ballonEl.dataset.spreker = sprekerCode || '';
+    if (ballonSprekerEl) ballonSprekerEl.textContent = sprekerNaam || '';
+    if (ballonTekstEl) ballonTekstEl.textContent = tekst;
+    // Herstart subtiele pop-animatie bij nieuwe spreker
+    ballonEl.hidden = true;
+    void ballonEl.offsetWidth;
+  }
+  ballonEl.hidden = isAfdruk && !window._toonUIInAfdruk;
+}
+
+function toonKeuzes(sleutel, items) {
+  if (!keuzeEl) return;
+  if (!items || !items.length) {
+    keuzeEl.hidden = true;
+    if (laatsteKeuzeSleutel) { keuzeEl.innerHTML = ''; laatsteKeuzeSleutel = ''; actieveKeuzeActies = []; }
+    return;
+  }
+  if (sleutel !== laatsteKeuzeSleutel) {
+    laatsteKeuzeSleutel = sleutel;
+    actieveKeuzeActies = items.map((it) => it.actie);
+    keuzeEl.innerHTML = '';
+    items.forEach((it, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'keuze-kaart';
+      btn.dataset.keuzeIdx = String(idx);
+      btn.innerHTML = `<span class="keuze-label">${it.label}</span><strong>${it.titel}</strong><span>${it.sub}</span>`;
+      btn.addEventListener('click', () => it.actie());
+      keuzeEl.appendChild(btn);
+    });
+  }
+  keuzeEl.hidden = isAfdruk && !window._toonUIInAfdruk;
+}
+
+function zetRegieUI(inRegie, celStand = 'uit', bijschrift = '') {
   stuur.enabled = !inRegie;
   if (kaderEl) kaderEl.classList.toggle('in-regie', inRegie);
-  if (celLaagEl) celLaagEl.hidden = !toonCel;
+  if (celLaagEl) celLaagEl.hidden = celStand !== 'porsche';
+  if (celDeurLaagEl) celDeurLaagEl.hidden = celStand !== 'deur';
   if (bijschriftEl) {
-    bijschriftEl.hidden = !bijschrift || isAfdruk;
+    bijschriftEl.hidden = !bijschrift || (isAfdruk && !window._toonUIInAfdruk);
     if (bijschrift) bijschriftEl.textContent = bijschrift;
   }
-  if (overslaanKnop) overslaanKnop.hidden = !inRegie || isAfdruk;
+  if (overslaanKnop) overslaanKnop.hidden = !inRegie || (isAfdruk && !window._toonUIInAfdruk);
 }
 
 function stopIntro(autoParkeren = false) {
   const wasActief = !!intro;
   intro = null;
-  zetRegieUI(false, false, '');
+  zetRegieUI(false, 'uit', '');
+  toonBallon('', '', '');
+  toonKeuzes('', null);
   const knop = document.getElementById('intro-knop');
   if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
   if (porsche) {
     porsche.group.visible = true;
+    porsche.streepGroep.visible = false;
     if (autoParkeren) {
       porsche.zetIntroStand(1.0);
       porsche.zetMotorLicht(0);
     }
   }
   if (belHand) belHand.zetReik(0, null);
+  LICHT.uGangLicht.value = gangLichtAan * LICHT.uBrandt.value;
   if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
   if (wasActief) werkCartoucheBij();
 }
 
-// ---- Kuifje / Ligne Claire 4-Shot Limited-Cel + Live 3D Intro (~15,5 sec) -> naadloos vrij 3D rondkijken:
-//   1 (0.00–0.26) Torenlaan & kruising: de leiblauwe Porsche 930 draait over het asfalt langs de handwijzer.
-//   2 (0.26–0.51) In de Porsche: 2D Kuifje-voorgrondcel met transparante ruiten vóór ons live bewegende 3D Blaricum!
-//   3 (0.51–0.70) De oprit op: draait het Monastic-erf op, stopt voor de baksteenmuur en klikt de koplampen uit.
+// ---- Kuifje / Ligne Claire 5-Scènes Interactief Verhaal ("Het Geheim van de Meentweg") -> naadloos vrij 3D rondkijken:
+//   1 (0.00–0.26) Torenlaan & kruising: de leiblauwe Porsche 930 met draaiende wielen, koplampkegels & bewegingsstrepen.
+//   2 (0.26–0.51) In de Porsche (2D duo-cel vóór live 3D Meentweg) + KEUZE 1 (3 Monastic-dossiers) + reactie bestuurder!
+//   3 (0.51–0.70) Het donkere erf op: natuurlijke inrit zonder rare 90°-draai, warme wandlantaarn & koplampen uit.
 //   4 (0.70–0.91) De schaduw & aanbellen: zwarte hoed-schaduw op de baksteenmuur + 2D Kuifje-hand op MONASTIC -> TRRRING!
-//   5 (0.91–1.00) Vrij 3D: camera zwaait vloeiend terug over het erf met geparkeerde Porsche & brandend gangraampje.
+//   5 (deur)      De achterdeur opent (2D Maker-cel) met antwoord op jouw dossier + KEUZE 2 (vrij 3D / ander dossier / site).
+//   6 (0.91–1.00) Vrij 3D: camera zwaait vloeiend uit over het maanverlichte erf met geparkeerde Porsche & brandend gangraampje.
 const hoekVoorScherm = (h) => (camera.aspect < 1 ? Math.min(62, h + 15) : h);
 const smooth01 = (x) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
-const MUUR_RECHTS = new THREE.Vector3(INTERCOM_NORMAAL.z, 0, -INTERCOM_NORMAAL.x); // scherm-rechts op de intercom-muur
+const MUUR_RECHTS = new THREE.Vector3(INTERCOM_NORMAAL.z, 0, -INTERCOM_NORMAAL.x);
 const tmpBelPos = new THREE.Vector3();
 const tmpUitOog = new THREE.Vector3();
 const tmpUitDoel = new THREE.Vector3();
 
-function pasIntroFrameToe(tNorm) {
+function pasIntroFrameToe(tNorm, celOverride = null) {
   const c = Math.max(0, Math.min(1, tNorm));
 
-  // 1. Porsche rijdt over c = 0.00..0.68 van de Torenlaan pal over het asfalt tot stilstand op de Monastic-oprit.
+  // 1. Porsche rijdt over c = 0.00..0.68 pal over het asfalt en vloeiend het grind op.
   const pT = Math.min(1, c / 0.68);
-  const inAutoCel = c >= 0.26 && c < 0.51;
+  const inAutoCel = celOverride ? celOverride === 'porsche' : (c >= 0.26 && c < 0.51);
   if (porsche) {
     porsche.group.visible = !inAutoCel;
     porsche.zetIntroStand(pT);
@@ -1730,18 +1991,18 @@ function pasIntroFrameToe(tNorm) {
       belRingT = c >= 0.84 ? Math.min(1, (c - 0.84) / 0.04) : 0;
       raamAan = c >= 0.855 ? smooth01((c - 0.855) / 0.035) : 0;
     } else if (c >= 0.91) {
-      // Na het aanbellen blijft het gangraampje warm goud branden terwijl de camera uitzwaait naar vrij 3D!
       raamAan = 1.0;
       gangLichtAan = 1.0;
     }
+    LICHT.uGangLicht.value = Math.max(raamAan, gangLichtAan) * LICHT.uBrandt.value;
     belHand.zetReik(reik, belWereld);
     intercom.zetStaat(LICHT.uBrandt.value, belDruk, belRingT, raamAan, schaduwT);
   }
 
-  // 3. Camera-regie in 4 strakke Kuifje-shots + vloeiende uit-zwaai naar vrij 3D rondkijken
+  // 3. Camera-regie per scène
   let bijschrift = '';
   if (c < 0.26) {
-    // Shot 1: Aankomst over de Torenlaan langs de straatlantaarn, handwijzer & verlichte etalage (vrij van de lantaarnpaal!)
+    // Shot 1: Aankomst over de Torenlaan langs de straatlantaarn, handwijzer & verlichte etalage
     const k = smooth01(c / 0.26);
     camera.position.set(-18.5 + 3.8 * k, 4.1 - 0.65 * k, 48.0 - 7.5 * k);
     stuur.target.set(-28.0 + 17.5 * k, 1.5 + 0.35 * k, 35.5 - 8.5 * k);
@@ -1751,23 +2012,22 @@ function pasIntroFrameToe(tNorm) {
       stuur.target.lerp(pPos, 0.50 + 0.25 * Math.sin(k * Math.PI));
     }
     camera.fov = hoekVoorScherm(36);
-    if (c < 0.22) bijschrift = 'Blaricum, laat op de avond…';
+    if (c < 0.24) bijschrift = 'Blaricum, laat op de avond. Een onopgeloste zaak…';
   } else if (c < 0.51) {
-    // Shot 2: In de Porsche (2D Kuifje-voorgrondcel) — live 3D camera rijdt langs Meentweg en kijkt links naar
-    // het verlichte hoekpand, de bomen, lantaarns en nachtwolken (schuift natuurgetrouw van rechts naar links!).
+    // Shot 2: In de Porsche (2D duo-voorgrondcel) — live 3D camera glijdt langs Meentweg & verlicht hoekpand!
     const k = (c - 0.26) / 0.25;
     const camX = -7.0 + 27.5 * k;
     const camZ = 27.2 - 19.2 * k;
     camera.position.set(camX, 1.65, camZ);
-    // Kijk schuin links-noordwest over de verlichte hoekpand-etalage, bomen en bakstenen gevels
     stuur.target.set(camX - 11.5, 2.75, camZ - 16.0);
     camera.fov = hoekVoorScherm(42);
   } else if (c < 0.70) {
-    // Shot 3: De oprit op — Porsche draait tussen heg en garage het grind op, stopt en dooft de koplampen
+    // Shot 3: Sfeervol het donkere Monastic-erf oprijden (volledig vloeiende bocht, nul plotse draai!)
     const k = smooth01((c - 0.51) / 0.19);
-    camera.position.set(22.4 - 4.4 * k, 2.55 - 0.45 * k, 0.4 + 1.2 * k);
-    stuur.target.set(17.5 - 4.0 * k, 1.35 - 0.30 * k, -1.6 + 0.4 * k);
-    camera.fov = hoekVoorScherm(40 - 3 * k);
+    camera.position.set(22.2 - 3.6 * k, 2.55 - 0.40 * k, 0.9 + 1.4 * k);
+    stuur.target.set(17.4 - 3.6 * k, 1.35 - 0.25 * k, -1.6 + 0.35 * k);
+    camera.fov = hoekVoorScherm(40 - 2 * k);
+    if (c < 0.67) bijschrift = 'Meentweg 1-a · Het donkere erf van Monastic.';
   } else if (c < 0.91) {
     // Shot 4: Close-up op de bakstenen pier, wandlantaarn, zwarte film-noir slagschaduw & 2D Kuifje-hand op MONASTIC!
     const k = smooth01((c - 0.70) / 0.21);
@@ -1781,7 +2041,7 @@ function pasIntroFrameToe(tNorm) {
       .add(new THREE.Vector3(0, 0.02 - 0.025 * k, 0));
     camera.fov = hoekVoorScherm(34 - 2 * k);
   } else {
-    // Outro (0.91–1.00): camera zwaait in 1 vloeiende beweging terug over het erf & de geparkeerde Porsche -> vrij 3D!
+    // Outro (0.91–1.00): camera zwaait vloeiend uit over het maanverlichte erf & geparkeerde Porsche -> vrij 3D!
     const k = smooth01((c - 0.91) / 0.09);
     tmpUitOog.copy(INTERCOM_POS)
       .addScaledVector(INTERCOM_NORMAAL, 0.94)
@@ -1795,15 +2055,114 @@ function pasIntroFrameToe(tNorm) {
     camera.fov = hoekVoorScherm(32 + 7 * k);
   }
 
-  zetRegieUI(!!intro, inAutoCel, bijschrift);
+  const celStand = celOverride || (inAutoCel ? 'porsche' : 'uit');
+  zetRegieUI(!!intro, celStand, bijschrift);
   camera.updateProjectionMatrix();
-  const kop = c < 0.26 ? ['De Torenlaan · Nacht', 'Een leiblauwe Porsche 930 draait Blaricum in'] :
-              c < 0.51 ? ['Meentweg · Onderweg', 'Langs het verlichte hoekpand richting Monastic'] :
-              c < 0.70 ? ['Het erf · Monastic', 'De Porsche rijdt de oprit op en dooft het licht'] :
-              c < 0.84 ? ['Monastic · Achterdeur', 'Een bekende schaduw glijdt langs de baksteenmuur'] :
+  const kop = celStand === 'deur' ? ['Monastic · De Achterdeur', 'De maker opent de deur in het warme studiolicht'] :
+              c < 0.26 ? ['De Torenlaan · Nacht', 'Een leiblauwe Porsche 930 draait Blaricum in'] :
+              c < 0.51 ? ['Meentweg · In de Porsche', 'Kies het dossier voor jullie bezoek aan Monastic'] :
+              c < 0.70 ? ['Het erf · Monastic', 'De Porsche stuurt het donkere grind op en dooft het licht'] :
+              c < 0.84 ? ['Monastic · Achterdeur', 'Een bekende schaduw glijdt langs de muur'] :
               c < 0.91 ? ['Monastic · Blaricum', 'Trrring… binnen springt het ganglicht aan'] :
                          ['Het erf · Kantoor', 'Sleep om vrij door Blaricum te kijken'];
   werkCartoucheBij(kop[0], kop[1]);
+}
+
+function kiesDossier(sleutel) {
+  if (!intro) return;
+  intro.dossier = DOSSIERS[sleutel] ? sleutel : 'website';
+  intro.fase = 'reactie';
+  intro.t0 = performance.now();
+  toonKeuzes('', null);
+}
+
+function stapNaarKeuze1() {
+  if (!intro) return;
+  intro.fase = 'keuze1';
+  intro.t0 = performance.now();
+  toonKeuzes('', null);
+}
+
+function stapNaarOutro() {
+  if (!intro) return;
+  gangLichtAan = 1.0;
+  LICHT.uGangLicht.value = LICHT.uBrandt.value;
+  intro.fase = 'outro';
+  intro.t0 = performance.now();
+  toonBallon('', '', '');
+  toonKeuzes('', null);
+}
+
+function werkInteractiefVerhaalBij(nu) {
+  if (!intro) return;
+  const elapsed = nu - intro.t0;
+  const dos = DOSSIERS[intro.dossier] || DOSSIERS.website;
+
+  if (intro.fase === 'torenlaan') {
+    const f = Math.min(1, elapsed / 4500);
+    toonBallon('', '', '');
+    toonKeuzes('', null);
+    pasIntroFrameToe(f * 0.258);
+    if (f >= 1) { intro.fase = 'keuze1'; intro.t0 = nu; }
+  } else if (intro.fase === 'keuze1') {
+    // Live 3D Blaricum blijft rustig voorbijglijden langs de ramen terwijl de bezoeker een dossier kiest!
+    const lus = 0.265 + ((elapsed * 0.000018) % 0.14);
+    pasIntroFrameToe(lus, 'porsche');
+    toonBallon('bijrijder', 'De Compagnon', '“We zijn bijna bij Monastic op de Meentweg! Welk dossier leggen we vanavond op tafel?”');
+    toonKeuzes('keuze1', Object.entries(DOSSIERS).map(([sl, d]) => ({
+      label: d.label, titel: d.titel, sub: d.sub, actie: () => kiesDossier(sl),
+    })));
+  } else if (intro.fase === 'reactie') {
+    const f = Math.min(1, elapsed / 2600);
+    pasIntroFrameToe(0.38 + f * 0.125, 'porsche');
+    toonBallon('bestuurder', 'De Bezoeker', dos.reactie);
+    toonKeuzes('', null);
+    if (f >= 1) { intro.fase = 'oprit'; intro.t0 = nu; }
+  } else if (intro.fase === 'oprit') {
+    const f = Math.min(1, elapsed / 3800);
+    toonBallon('', '', '');
+    toonKeuzes('', null);
+    pasIntroFrameToe(0.51 + f * 0.188);
+    if (f >= 1) { intro.fase = 'aanbellen'; intro.t0 = nu; }
+  } else if (intro.fase === 'aanbellen') {
+    const f = Math.min(1, elapsed / 3600);
+    toonBallon('', '', '');
+    toonKeuzes('', null);
+    pasIntroFrameToe(0.70 + f * 0.208);
+    if (f >= 1) {
+      gangLichtAan = 1.0;
+      LICHT.uGangLicht.value = LICHT.uBrandt.value;
+      intro.fase = 'deur';
+      intro.t0 = nu;
+    }
+  } else if (intro.fase === 'deur') {
+    pasIntroFrameToe(0.91, 'deur');
+    toonBallon('maker', 'Monastic · De Maker', dos.maker);
+    toonKeuzes(`deur-${intro.dossier}`, [
+      { label: 'Vrij 3D', titel: 'Verken Blaricum in 3D →', sub: 'Sleep & zoom zelf over het maanverlichte erf', actie: () => stapNaarOutro() },
+      { label: 'Opnieuw', titel: 'Ander dossier kiezen', sub: 'Terug in de Porsche voor een andere verhaallijn', actie: () => stapNaarKeuze1() },
+      { label: dos.label, titel: dos.urlLabel, sub: 'Opent het echte aanbod in een nieuw tabblad', actie: () => { window.open(dos.url, '_blank', 'noopener'); stapNaarOutro(); } },
+    ]);
+  } else if (intro.fase === 'outro') {
+    const f = Math.min(1, elapsed / 1800);
+    toonBallon('', '', '');
+    toonKeuzes('', null);
+    pasIntroFrameToe(0.91 + f * 0.09, 'uit');
+    if (f >= 1) {
+      intro = null;
+      gangLichtAan = 1.0;
+      LICHT.uGangLicht.value = LICHT.uBrandt.value;
+      standNaam = 'erf';
+      zetRegieUI(false, 'uit', '');
+      if (porsche) { porsche.group.visible = true; porsche.streepGroep.visible = false; porsche.zetMotorLicht(0); }
+      if (belHand) belHand.zetReik(0, null);
+      if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
+      const knop = document.getElementById('intro-knop');
+      if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
+      for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', String(k.dataset.stand === 'erf'));
+      werkCartoucheBij('Het erf · Monastic', 'Sleep om vrij door Blaricum te kijken');
+    }
+  }
 }
 
 function startIntro() {
@@ -1811,12 +2170,15 @@ function startIntro() {
   stopRondleiding();
   reis = null;
   gangLichtAan = 0;
+  LICHT.uGangLicht.value = 0;
   if (porsche) {
     porsche.group.visible = true;
     porsche.zetMotorLicht(1);
   }
-  intro = { t0: performance.now(), duur: 15500 };
-  zetRegieUI(true, false, 'Blaricum, laat op de avond…');
+  intro = { fase: 'torenlaan', t0: performance.now(), dossier: 'website' };
+  zetRegieUI(true, 'uit', 'Blaricum, laat op de avond. Een onopgeloste zaak…');
+  toonBallon('', '', '');
+  toonKeuzes('', null);
   const knop = document.getElementById('intro-knop');
   if (knop) { knop.setAttribute('aria-pressed', 'true'); knop.textContent = 'Stop intro'; }
   for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', 'false');
@@ -1825,6 +2187,7 @@ function startIntro() {
 function slaIntroOver() {
   if (!intro) return;
   gangLichtAan = 1.0;
+  LICHT.uGangLicht.value = LICHT.uBrandt.value;
   stopIntro(true);
   naar('erf', false);
 }
@@ -1900,8 +2263,8 @@ async function begin() {
     laad('lijn-n.bin', Int8Array), laad('lijn-eig.bin', Float32Array),
   ]);
 
-  // Splits de Porsche 930 Turbo (incl. 4 losse draaiende wielen & echte 3D-koplampen) los van het dorp.
-  const gesplitst = splitsPorsche(rPosRaw, rNorRaw, rVakRaw, lPosRaw, lNRaw, lEigRaw, id.wit, id.lamp);
+  // Splits de Porsche 930 Turbo (koets + 4 rechtgezette wielen van uitsluitend autowiel/metaal) los van het dorp.
+  const gesplitst = splitsPorsche(rPosRaw, rNorRaw, rVakRaw, lPosRaw, lNRaw, lEigRaw, id.wit, id.lamp, id.autowiel, id.metaal);
   // Verwijder zowel de 7 statische low-poly voetgangers als storende horizontale Blender-bloknaden op de achtergevel.
   const { lPos, lN, lEig } = schoonAchtergevelLijnen(gesplitst.statisch.lPos, gesplitst.statisch.lN, gesplitst.statisch.lEig);
 
@@ -1981,10 +2344,10 @@ async function begin() {
 
   const gloed = gloedBeeld();
 
-  // De strakke Ligne Claire Porsche 930 Turbo met 4 draaiende & sturende wielen (schone Hergé crease 0.68)!
+  // De strakke Ligne Claire Porsche 930 Turbo + Kuifje-bewegingsstrepen in wereldruimte
   pLijnMat = lijnShader(0.68);
   porsche = bouwPorscheLeven(gesplitst.porsche, rompMat, rand, pLijnMat, gloed);
-  scene.add(porsche.group);
+  scene.add(porsche.group, porsche.streepGroep);
 
   // De echte Monastic-intercom + wandlantaarn + film-noir muurschaduw én de 2D Kuifje-aanbelcel (hand-cel.webp)!
   intercom = bouwIntercom(gloed, lMat.uniforms.uRes, lMat.uniforms.uLijn);
@@ -1992,7 +2355,7 @@ async function begin() {
   belHand = bouwBelHandCel(LICHT.uNacht);
   scene.add(belHand.groep);
 
-  // Wolken uit Claude's g-klare-lijn: 11 vaste platen hoog rondom het dorp (overdag stapelwolken, 's nachts flarden).
+  // Nachtwolken met heldere maanlichtreflecties langs de randen (11 vaste platen hoog rondom het dorp)
   const plekken = [[-520, 190, -640, 300], [260, 250, -820, 380], [760, 170, -300, 260], [-820, 230, 180, 340], [520, 210, 640, 300], [-240, 260, 860, 360],
     [-60, 360, -900, 460], [560, 130, -720, 300], [980, 330, -640, 420], [-900, 150, -420, 320], [100, 150, 900, 300]];
   for (const [x, y, z, b] of plekken) {
@@ -2004,29 +2367,43 @@ async function begin() {
     scene.add(w);
   }
 
-  // Alleen echte straatlantaarnkringen (model.lampen) + directe gloed vlak voor de verlichte hoekpand-etalage.
+  // Echte straatlantaarns + Monastic wandlantaarn boven de intercom + directe gloed vlak voor de verlichte hoekpand-etalage.
   const etalageGloed = [
     [-9.17, 0.9, 12.7, 3.5], [-10.0, 0.9, 11.43, 3.5], [-7.29, 0.9, 15.58, 3.5], [-6.46, 0.9, 16.85, 3.5],
     [-4.69, 0.9, 19.55, 3.5], [-5.52, 0.9, 18.28, 3.5], [-12.95, 0.9, 3.63, 3.5], [-11.54, 0.9, 5.78, 3.5],
     [-9.07, 0.9, 9.56, 3.5], [-10.01, 0.9, 8.13, 3.5],
   ];
-  const kringen = [...(model.lampen || []).map((q) => [...q, 5.9]), ...etalageGloed].slice(0, 40);
+  const wandLantaarn = [[8.25, 2.08, -1.62, 1.95]];
+  const kringen = [...(model.lampen || []).map((q) => [...q, 5.9]), ...wandLantaarn, ...etalageGloed].slice(0, 40);
   kringen.forEach((q, i) => LICHT.uLamp.value[i].set(q[0], q[1], q[2], q[3]));
   LICHT.uLampN.value = kringen.length;
 
+  // Volumetrische zachte lichtkegels onder elke straatlantaarn (zoals op de referentieplaat!)
+  lampKegelMat = maakLichtKegelMat(0xf7ea92, 0.16);
+  const straalGeo = new THREE.CylinderGeometry(0.18, 2.15, 3.6, 16, 1, true);
+  straalGeo.translate(0, -1.8, 0);
   for (const [x, y, z] of model.lampen || []) {
+    const ly = y < 3.7 ? y - 0.18 : y;
     const l = new THREE.Sprite(new THREE.SpriteMaterial({ map: gloed, depthWrite: false, fog: false }));
-    l.position.set(x, y < 3.7 ? y - 0.18 : y, z);
+    l.position.set(x, ly, z);
     l.scale.set(2.3, 2.3, 1);
     l.renderOrder = 12;
     lampen.push(l);
     scene.add(l);
+
+    const keg = new THREE.Mesh(straalGeo, lampKegelMat);
+    keg.position.set(x, ly - 0.08, z);
+    keg.scale.set(1, Math.min(1.15, Math.max(0.75, ly / 3.6)), 1);
+    keg.renderOrder = 10;
+    keg.visible = false;
+    lampKegels.push(keg);
+    scene.add(keg);
   }
 
-  // De maan uit Claude's g-klare-lijn: sikkel met zachte koelblauwe hof hoog boven het oosten.
+  // De maansikkel met zilverblauwe hof exact uitgelijnd op LICHT.uMaanDir (reflecties op wolken & kantoor!)
   maan = new THREE.Sprite(new THREE.SpriteMaterial({ map: maanBeeld(), depthWrite: false, fog: false }));
-  maan.position.set(520, 300, -1150);
-  maan.scale.set(150, 150, 1);
+  maan.position.set(420, 260, -980);
+  maan.scale.set(175, 175, 1);
   maan.visible = false;
   scene.add(maan);
 
@@ -2047,17 +2424,21 @@ async function begin() {
   if (rondKnop) rondKnop.addEventListener('click', startRondleiding);
   stuur.addEventListener('start', () => { reis = null; stopRondleiding(); });
 
-  // Sneltoetsen: 1-7 voor standpunten, I voor de Kuifje-intro, Esc om over te slaan, spatie voor rondleiding.
+  // Sneltoetsen: 1-3 kiezen een dossier tijdens de keuzemomenten, anders 1-7 voor standpunten, I voor verhaal, Esc overslaan.
   const standLijst = ['hoekpand', 'kruising', 'wijzer', 'erf', 'straat', 'plein', 'dorp'];
   window.addEventListener('keydown', (ev) => {
     if (ev.target && /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
-    if (ev.key === 'Escape' && intro) slaIntroOver();
-    else if (ev.key >= '1' && ev.key <= '7') naar(standLijst[Number(ev.key) - 1]);
+    if (ev.key === 'Escape' && intro) { slaIntroOver(); return; }
+    if (intro && (intro.fase === 'keuze1' || intro.fase === 'deur') && ev.key >= '1' && ev.key <= '3') {
+      const fn = actieveKeuzeActies[Number(ev.key) - 1];
+      if (fn) { ev.preventDefault(); fn(); return; }
+    }
+    if (ev.key >= '1' && ev.key <= '7') naar(standLijst[Number(ev.key) - 1]);
     else if (ev.key.toLowerCase() === 'i') startIntro();
     else if (ev.code === 'Space') { ev.preventDefault(); startRondleiding(); }
   });
 
-  // Speel de korte Kuifje-intro direct automatisch af bij het openen (tenzij een vaste stand of ?afdruk is gevraagd).
+  // Speel het korte interactieve Kuifje-verhaal direct af bij openen (tenzij een vaste stand of ?afdruk is gevraagd).
   if (!isAfdruk && !vraag.has('stand') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     startIntro();
   } else if (vraag.has('intro')) {
@@ -2065,13 +2446,7 @@ async function begin() {
   }
 
   melding.hidden = true;
-  window.toon = (stand, stijl, licht) => {
-    naar(stand, true);
-    kleur(stijl, licht, true);
-    if (porsche) { porsche.group.visible = true; porsche.zetIntroStand(1.0); porsche.zetMotorLicht(0); }
-    if (belHand) belHand.zetReik(0, null);
-    if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
-    if (vogels) vogels.update(0);
+  const renderNu = () => {
     if (SLAG) slagKaart();
     stuur.update();
     const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
@@ -2079,16 +2454,28 @@ async function begin() {
     if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;
     renderer.render(scene, camera);
   };
+  window.toon = (stand, stijl, licht) => {
+    naar(stand, true);
+    kleur(stijl, licht, true);
+    if (porsche) { porsche.group.visible = true; porsche.streepGroep.visible = false; porsche.zetIntroStand(1.0); porsche.zetMotorLicht(0); }
+    if (belHand) belHand.zetReik(0, null);
+    if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
+    if (vogels) vogels.update(0);
+    renderNu();
+  };
   window.toonIntro = (tNorm, stijl, licht) => {
     stopIntro(false); stopRondleiding();
     kleur(stijl, licht, true);
     pasIntroFrameToe(tNorm);
-    if (SLAG) slagKaart();
-    stuur.update();
-    const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
-    lijn.material.uniforms.uPx.value = uPxVal;
-    if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;
-    renderer.render(scene, camera);
+    renderNu();
+  };
+  window.toonVerhaalStap = (stap, dossier = 'website', stijl = 'bunker', licht = 'nacht') => {
+    stopIntro(false); stopRondleiding();
+    kleur(stijl, licht, true);
+    window._toonUIInAfdruk = true;
+    intro = { fase: stap, t0: performance.now() - 1200, dossier };
+    werkInteractiefVerhaalBij(performance.now());
+    renderNu();
   };
 
   let beelden = 0, vorige = performance.now(), traagste = 0;
@@ -2107,21 +2494,7 @@ async function begin() {
       if (vogels && vogels.group.visible) vogels.update(sec);
     }
     if (intro) {
-      const t = Math.min(1, (nu - intro.t0) / intro.duur);
-      pasIntroFrameToe(t);
-      if (t >= 1) {
-        intro = null;
-        gangLichtAan = 1.0;
-        standNaam = 'erf';
-        zetRegieUI(false, false, '');
-        if (porsche) { porsche.group.visible = true; porsche.zetMotorLicht(0); }
-        if (belHand) belHand.zetReik(0, null);
-        if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
-        const knop = document.getElementById('intro-knop');
-        if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
-        for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', String(k.dataset.stand === 'erf'));
-        werkCartoucheBij('Het erf · Monastic', 'Sleep om vrij door Blaricum te kijken');
-      }
+      werkInteractiefVerhaalBij(nu);
     } else {
       if (rondleiding) {
         const u = ((nu - rondleiding.t0) % rondleiding.duur) / rondleiding.duur;
@@ -2145,12 +2518,10 @@ async function begin() {
       }
     }
     stuur.update();
-    // Kijkt de camera ergens anders, of van veel dichterbij of verder? Dan de schaduwkaart opnieuw.
     if (SLAG && !reis && !intro && beelden % 20 === 0) {
       const wil = Math.min(280, Math.max(55, camera.position.distanceTo(stuur.target) * 1.25));
       if (Math.abs(wil - slagVeld) > 0.3 * slagVeld || slagMidden.distanceTo(new THREE.Vector3(stuur.target.x, 0, stuur.target.z)) > 0.35 * slagVeld) slagKaart();
     }
-    // Pixels per meter op een meter afstand: daarmee rekent de lijn golflengtes en rijafstanden om naar het scherm.
     const uPxVal = camera.projectionMatrix.elements[5] * lijn.material.uniforms.uRes.value.y * 0.5;
     lijn.material.uniforms.uPx.value = uPxVal;
     if (pLijnMat) pLijnMat.uniforms.uPx.value = uPxVal;

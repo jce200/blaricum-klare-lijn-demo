@@ -147,12 +147,35 @@ body {
   100% { transform: translateX(-48%); opacity: 0; }
 }
 
+/* 2D Kuifje-deurcel (Scène 5: De Maker opent de achterdeur van Monastic) */
+.cel-deur-laag {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  background: #141d28;
+  animation: celFadeIn 280ms ease-out;
+}
+.cel-deur-laag[hidden] { display: none; }
+.cel-deur {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 42%;
+  display: block;
+}
+@keyframes celFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Klassiek Kuifje-vertelkadertje linksboven tijdens de intro */
 .strip-bijschrift {
   position: absolute;
   top: 16px;
   left: 18px;
-  z-index: 4;
+  z-index: 5;
   margin: 0;
   padding: 6px 13px 7px;
   background: #f5ebc2;
@@ -165,12 +188,145 @@ body {
 }
 .strip-bijschrift[hidden] { display: none; }
 
+/* Authentieke Kuifje-tekstballon (witte strippagina, 2px zwarte lijn, staartje naar de spreker!) */
+.strip-ballon {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: min(460px, calc(100% - 36px));
+  padding: 11px 16px 12px;
+  background: #fdfbf2;
+  color: #0d1014;
+  border: 2.5px solid #080a0c;
+  border-radius: 18px;
+  box-shadow: 4px 4px 0 rgba(8, 10, 12, 0.88);
+  pointer-events: none;
+  animation: ballonPop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.strip-ballon[hidden] { display: none; }
+.strip-ballon::before,
+.strip-ballon::after {
+  content: "";
+  position: absolute;
+  bottom: -15px;
+  left: 24%;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+.strip-ballon::before {
+  border-width: 15px 12px 0 8px;
+  border-color: #080a0c transparent transparent transparent;
+}
+.strip-ballon::after {
+  bottom: -11px;
+  left: calc(24% + 2.5px);
+  border-width: 12px 9.5px 0 6px;
+  border-color: #fdfbf2 transparent transparent transparent;
+}
+.strip-ballon[data-spreker="bijrijder"] { left: 26%; }
+.strip-ballon[data-spreker="bijrijder"]::before { left: 26%; }
+.strip-ballon[data-spreker="bijrijder"]::after { left: calc(26% + 2.5px); }
+.strip-ballon[data-spreker="bestuurder"] { left: 54%; }
+.strip-ballon[data-spreker="bestuurder"]::before { left: 46%; }
+.strip-ballon[data-spreker="bestuurder"]::after { left: calc(46% + 2.5px); }
+.strip-ballon[data-spreker="maker"] { left: 32%; }
+.strip-ballon[data-spreker="maker"]::before { left: 28%; }
+.strip-ballon[data-spreker="maker"]::after { left: calc(28% + 2.5px); }
+.ballon-spreker {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b4c2e;
+  margin-bottom: 3px;
+}
+.ballon-tekst {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 400;
+  color: #0d1014;
+}
+@keyframes ballonPop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.92) translateY(5px); }
+  to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+/* Interactieve Kuifje dossier-keuzekaarten onderin beeld */
+.verhaal-keuze {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(820px, calc(100% - 170px));
+  animation: keuzeOp 260ms ease-out;
+}
+.verhaal-keuze[hidden] { display: none; }
+.keuze-kaart {
+  appearance: none;
+  text-align: left;
+  font: inherit;
+  padding: 10px 13px 11px;
+  background: #f6f0dc;
+  color: #0d1014;
+  border: 2.5px solid #080a0c;
+  box-shadow: 4px 4px 0 #080a0c;
+  cursor: pointer;
+  transition: transform 110ms ease, background-color 110ms ease, box-shadow 110ms ease;
+}
+.keuze-kaart:hover,
+.keuze-kaart:focus-visible {
+  background: #fae89c;
+  transform: translate(-1.5px, -2px);
+  box-shadow: 5.5px 6px 0 #080a0c;
+  outline: none;
+}
+.keuze-kaart:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 2px 2px 0 #080a0c;
+}
+.keuze-kaart .keuze-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b4520;
+  margin-bottom: 2px;
+}
+.keuze-kaart strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #080a0c;
+  margin-bottom: 3px;
+}
+.keuze-kaart span {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: #343a40;
+}
+@keyframes keuzeOp {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Discrete Overslaan-knop tijdens de regie-intro */
 .overslaan {
   position: absolute;
   right: 18px;
   bottom: 16px;
-  z-index: 4;
+  z-index: 7;
   font: inherit;
   font-size: 14px;
   color: var(--inkt);
@@ -205,9 +361,22 @@ body {
   .cartouche strong { font-size: 13px; }
   .cartouche span { display: none; }
   .strip-bijschrift { top: 10px; left: 10px; font-size: 13px; padding: 4px 9px; }
+  .cel-porsche { object-position: 32% 54%; }
+  .cel-deur { object-position: 38% 38%; }
+  .strip-ballon { top: 10px; left: 50% !important; padding: 8px 12px; max-width: calc(100% - 20px); }
+  .ballon-tekst { font-size: 13.5px; }
+  .verhaal-keuze {
+    grid-template-columns: 1fr;
+    width: calc(100% - 20px);
+    bottom: 54px;
+    gap: 6px;
+  }
+  .keuze-kaart { padding: 7px 10px; }
+  .keuze-kaart strong { font-size: 13.5px; }
+  .keuze-kaart span { font-size: 11.5px; }
   .overslaan { right: 10px; bottom: 10px; font-size: 13px; padding: 5px 10px; }
   .voet { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .keuze button, .cartouche, .cel-porsche, .cel-glans { transition: none; animation: none; }
+  .keuze button, .cartouche, .cel-porsche, .cel-glans, .cel-deur-laag, .strip-ballon, .verhaal-keuze { transition: none; animation: none; }
 }
