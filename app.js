@@ -125,13 +125,15 @@ const SLAGCODE = `
   uniform float uGangLicht;
   bool klSlag(vec3 p, vec3 n, float weg) {
     if (uSlag < 0.5) return false;
-    vec3 q = p + n * weg + 0.05 * vec3(klRuis(p * 0.8), 0.0, klRuis(p * 0.8 + 31.0));
+    vec3 q = uKlare > 0.5
+      ? (p + n * weg)
+      : (p + n * weg + 0.05 * vec3(klRuis(p * 0.8), 0.0, klRuis(p * 0.8 + 31.0)));
     vec4 l = uLichtMat * vec4(q, 1.0);
     vec3 s = l.xyz / l.w * 0.5 + 0.5;
     if (s.x <= 0.0 || s.x >= 1.0 || s.y <= 0.0 || s.y >= 1.0 || s.z >= 1.0) return false;
     float t = 1.3 / ${SLAGMAAT}.0, som = 0.0;
     for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++)
-      som += step(texture2D(uSlagKaart, s.xy + vec2(float(i), float(j)) * t).r + 0.00018, s.z);
+      som += step(texture2D(uSlagKaart, s.xy + vec2(float(i), float(j)) * t).r + 0.00022, s.z);
     return som > 4.5;
   }
   vec3 klNevel(vec3 kleur, float afstand) {
@@ -141,37 +143,43 @@ const SLAGCODE = `
   float klLamp(vec3 p, vec3 n) {
     if (uNacht < 0.05) return 0.0;
     float k = 0.0;
-    float golf = 0.16 * klRuis(p * 0.7);
-    // 1. Echte straatlantaarns, directe etalagegloed en de intieme wandlantaarn boven de Monastic-intercom.
+    float golf = 0.10 * klRuis(p * 0.75);
+    // 1. Echte straatlantaarns, subtiele etalagegloed en warme wand-/raamgloed bij Monastic.
     for (int i = 0; i < 40; i++) {
       if (i >= uLampN) break;
       vec3 v = uLamp[i].xyz - p;
       float rad = uLamp[i].w;
       if (abs(n.y) < 0.45) {
-        // Op verticale gevels: zachte, atmosferische warme gloed rond wandlamp en verlichte ramen (geen harde uitgeknipte schijf!)
-        vec3 vw = vec3(v.x, v.y - 0.12, v.z);
+        // Op verticale gevels: warme, subtiel getrapte strip-gloed rond wandlamp en verlichte ramen!
+        vec3 vw = vec3(v.x, v.y - 0.10, v.z);
         float dw = length(vw);
-        if (dw < rad * 1.18 && dot(n, v) > -0.10) {
-          float zacht = pow(1.0 - smoothstep(0.0, rad * 1.18, dw), 1.75);
-          k = max(k, zacht * 0.46);
+        if (dw < rad * 1.15 && dot(n, v) > -0.10) {
+          float zacht = pow(1.0 - smoothstep(0.0, rad * 1.15, dw), 1.65);
+          k = max(k, zacht * 0.48);
         }
       } else {
-        // Op de grond (asfalt/grind/stoep): krachtige, heldere Ligne Claire-lichtcirkel onder elke lantaarn!
+        // Op de grond (asfalt/grind/stoep): strakke, gefocuste goudgele Kuifje-lichtcirkel (niet te groot/modderig!)
         float d = length(v) + golf;
         if (d < rad && v.y > 0.22 && dot(n, v) > 0.0) {
-          k = max(k, d < rad * 0.58 ? 0.68 : 0.36);
+          k = max(k, d < rad * 0.54 ? 0.76 : 0.42);
         }
       }
     }
-    // 2. Warm licht dat uit de verlichte erfdeuren en het gangraampje van Monastic over de visgraatklinkers en het grind valt.
-    if (p.y < 0.35 && n.y > 0.65 && p.x > 7.5 && p.x < 14.5 && p.z > -3.0 && p.z < 5.5) {
-      float dDeur = length((p.xz - vec2(10.35, 0.85)) * vec2(0.55, 0.45));
-      float deurGloed = pow(1.0 - smoothstep(0.0, 2.2, dDeur), 1.55) * 0.48;
-      k = max(k, deurGloed);
+    // 2. Strakke grafische lichtbundel uit de centrale Monastic-erfdeuren & gangraampje over de visgraatklinkers (paneel 3!).
+    if (p.y < 0.35 && n.y > 0.65 && p.x > 7.5 && p.x < 14.8 && p.z > -3.0 && p.z < 5.5) {
+      float dnE = (p.x - 8.16) * 0.8364 + (p.z + 1.52) * (-0.5481);
+      float dsE = (p.x - 8.16) * 0.5481 + (p.z + 1.52) * 0.8364;
+      // Grafische goudgele lichtwig recht vóór de dubbele openslaande erfdeuren (ds = 1.5..3.8, dn = 0..2.8 m)
+      float halBreed = 1.05 + dnE * 0.32;
+      if (dnE > -0.1 && dnE < 2.95 && abs(dsE - 2.63) < halBreed) {
+        float wFade = 1.0 - smoothstep(1.9, 2.95, dnE);
+        float kern = abs(dsE - 2.63) < (0.72 + dnE * 0.18) ? 0.62 : 0.34;
+        k = max(k, kern * wFade);
+      }
       if (uGangLicht > 0.05) {
         vec2 dg = p.xz - vec2(9.2, -1.25);
         float dr = length(dg * vec2(0.55, 0.85));
-        k = max(k, pow(1.0 - smoothstep(0.0, 1.55, dr), 1.4) * 0.54 * uGangLicht);
+        k = max(k, pow(1.0 - smoothstep(0.0, 1.55, dr), 1.4) * 0.56 * uGangLicht);
       }
     }
     // 3. Porsche-koplampbundels op het wegdek: strakke Ligne Claire-lichtbundels vóór de voorbumper.
@@ -187,7 +195,7 @@ const SLAGCODE = `
         bool inNeus = neus >= 1.0 || (dMin * dMin + (1.0 - neus) * (1.0 - neus) < 1.0);
         float reik = a + 0.32 * golf;
         if (inNeus && dMin < 1.0 && reik < 15.2) {
-          float bundel = (reik < 8.4 && dMin < 0.72) ? 0.74 : 0.44;
+          float bundel = (reik < 8.4 && dMin < 0.72) ? 0.78 : 0.46;
           k = max(k, bundel * uKopAan);
         }
       }
@@ -195,8 +203,10 @@ const SLAGCODE = `
     return k * uNacht;
   }`;
 
-// ---- De vlakken: handgetekende Ligne Claire-architectuur (fijne dakpannen, subtiel metselwerk, donkere erfschaduwen,
-//      subtiele maanreflectie en gedempte avond-etalageverlichting voor de Blaricumsche Boekhandel!).
+// ---- De vlakken: echte Belgische strip-look (v11):
+//      - Echte harde 3D slagschaduwen (klSlag) + donkere dakoverstek-schaduwband onder de goot!
+//      - Rustige egale kleurvlakken met SPAARZAME handgetekende steen- en dakpan-clusters (NOOIT een vol CGI-raster!)
+//      - Echte 45° diagonale visgraatklinkers langs Monastic & handgetekende striphagen!
 const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
   uniforms: { palet: { value: new Float32Array(vakken * 6) }, ...LICHT },
   vertexShader: `
@@ -217,7 +227,8 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
     void main() {
       vec3 n = normalize(cross(dFdx(vP), dFdy(vP)));
       int s = int(vVak.x + 0.5);
-      bool inSlag = uKlare > 0.5 ? false : klSlag(vP, n, 0.17);
+      // Echte harde Ligne Claire slagschaduwen uit de 4096px zon-/maanschaduwkaart!
+      bool inSlag = klSlag(vP, n, 0.14);
       bool licht = dot(n, uZon) > 0.08 && !inSlag;
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
       float dist = length(cameraPosition - vP);
@@ -229,103 +240,167 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       bool isDak = (s == ${id.dak_lei} || s == ${id.dak_grijs} || s == ${id.dak_antraciet} || s == ${id.dak_bruinrood} || s == ${id.dak_terracotta} || s == ${id.dak_oranje} || s == ${id.dak_riet});
       bool isGrind = (s == ${id.erf} || s == ${id.grind} || s == ${id.tuinpad});
 
-      // 0a. Handgetekende baksteengevels zoals in het 4-luik (paneel 1 & 3):
-      //     Geen drukke spikkels, maar fijne, regelmatige Rotring-voeglijnen + strakke donkere muurplint!
+      // 0a. ECHTE KLARE LIJN BAKSTEENGEVELS (zoals in 4-luik variant 2!):
+      //     Rustige, egale kleurvlakken + donkere dakoverstek-schaduwband onder de goot + alleen SPAARZAME
+      //     handgetekende clusters van 2-4 losse steentjes (NOOIT alle stenen van het hele pand!).
       if (isBaksteen && abs(n.y) < 0.35 && dist < 44.0) {
-        float fadeB = 1.0 - smoothstep(18.0, 40.0, dist);
+        float fadeB = 1.0 - smoothstep(18.0, 42.0, dist);
         float fwY = max(fwidth(vP.y), 0.0025);
+        // Strakke donkere muurplint langs de grond
         float inPlint = 1.0 - smoothstep(0.36 - fwY, 0.36 + fwY, vP.y);
         float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.36))) * (1.0 - smoothstep(26.0, 42.0, dist));
-        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.18, 0.21, 0.25) : vec3(0.55, 0.54, 0.51);
-        k = mix(k, plintKleur, inPlint * 0.85);
-        k = mix(k, uInktKleur, plintRand * 0.88);
+        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.16, 0.20, 0.25) : vec3(0.55, 0.54, 0.51);
+        k = mix(k, plintKleur, inPlint * 0.86);
+        k = mix(k, uInktKleur, plintRand * 0.90);
 
-        if (vP.y > 0.38 && fadeB > 0.02) {
+        // Scherpe, grafische dakoverstek-schaduwband onder de goot (y = 3.45..4.15 m — geeft meteen echte striptekening-diepte!)
+        if (vP.y > 3.35 && vP.y < 4.25) {
+          float gootS = smoothstep(3.40, 3.48, vP.y);
+          k = mix(k, k * vec3(0.60, 0.65, 0.76), gootS * 0.78);
+        }
+
+        // Spaarzame handgetekende losse baksteen-groepjes (100% hele steentjes, geen afgesneden halve randen — puur Hergé!)
+        if (vP.y > 0.44 && vP.y < 3.42 && fadeB > 0.02) {
           vec3 tang = normalize(vec3(-n.z, 0.0, n.x));
           float u = dot(vP, tang), v = vP.y;
-          // Fijn Nederlands Waalformaat in rustig halfsteensverband (scherpe Rotring-penlijn zoals in het 4-luik!)
-          float bh = 0.088, bw = 0.25;
+          float bh = 0.098, bw = 0.27;
           float rij = floor(v / bh);
           float uOff = u + mod(rij, 2.0) * (bw * 0.5);
           float kol = floor(uOff / bw);
           vec2 f = vec2(fract(uOff / bw), fract(v / bh));
-          // Subtiele steen-tot-steen warmtevariatie zodat elke gevel handgekleurd oogt
-          float hS = klHash(vec3(kol, rij, floor(dot(vP, n) * 2.0) + 11.3));
-          k *= 1.0 + (hS - 0.5) * 0.085 * fadeB;
-          float fwU = max(fwidth(uOff / bw), 0.010);
-          float fwV = max(fwidth(v / bh), 0.016);
-          float antiMoire = 1.0 - smoothstep(0.26, 0.52, fwV);
-          float hLijn = (1.0 - smoothstep(max(0.055, fwV * 0.9) - fwV, max(0.055, fwV * 0.9) + fwV, f.y));
-          float vLijn = (1.0 - smoothstep(max(0.030, fwU * 0.9) - fwU, max(0.030, fwU * 0.9) + fwU, f.x));
-          float voeg = max(hLijn * 0.90, vLijn * 0.68);
-          vec3 voegKleur = mix(uInktKleur, k * 0.30, 0.28);
-          k = mix(k, voegKleur, voeg * fadeB * antiMoire * 0.48);
+          // Cluster uitgelijnd op hele steencellen (blok van 5 x 4 stenen -> daarin 2-4 losse hele steentjes)
+          vec2 cl = floor(vec2(kol / 5.0, rij / 4.0));
+          float clKans = klHash(vec3(cl, floor(dot(vP, n) * 1.5) + 7.1));
+          vec2 inB = vec2(mod(kol, 5.0), mod(rij, 4.0));
+          float steenKans = klHash(vec3(kol, rij, 19.3));
+          bool inGroep = clKans > 0.62 && inB.x >= 1.0 && inB.x <= 3.0 && inB.y >= 1.0 && inB.y <= 2.0 && steenKans > 0.44;
+          if (inGroep) {
+            float fwU = max(fwidth(uOff / bw), 0.012);
+            float fwV = max(fwidth(v / bh), 0.016);
+            float am = 1.0 - smoothstep(0.28, 0.52, fwV);
+            // Subtiele lichte of donkere baksteentoon + strakke hele penomtrek
+            float toon = steenKans > 0.74 ? 0.85 : 1.11;
+            k *= mix(1.0, toon, fadeB * am * 0.68);
+            float randX = max(1.0 - smoothstep(max(0.055, fwU) - fwU, max(0.055, fwU) + fwU, f.x),
+                              smoothstep(1.0 - max(0.055, fwU) - fwU, 1.0 - max(0.055, fwU) + fwU, f.x));
+            float randY = max(1.0 - smoothstep(max(0.085, fwV) - fwV, max(0.085, fwV) + fwV, f.y),
+                              smoothstep(1.0 - max(0.085, fwV) - fwV, 1.0 - max(0.085, fwV) + fwV, f.y));
+            k = mix(k, uInktKleur, max(randX, randY) * fadeB * am * 0.74);
+          }
         }
       }
 
-      // 0b. Handgetekende dakpannen op schuine daken (exact de getekende dakrijen uit het 4-luik!)
+      // 0b. ECHTE KLARE LIJN DAKEN (zoals 4-luik variant 2!):
+      //     Rustig egaal leigrijs dakvlak + 3 strakke pannenrijen langs de dakgoot + enkele spaarzame dakpan-accenten!
       if (isDak && n.y > 0.24 && n.y < 0.94 && dist < 56.0) {
         float fadeD = 1.0 - smoothstep(24.0, 54.0, dist);
         vec3 tang = normalize(vec3(-n.z, 0.0, n.x));
         float u = dot(vP, tang);
         float helling = sqrt(max(0.08, 1.0 - n.y * n.y));
-        float sH = vP.y / helling; // echte afstand langs de dakhelling
-        float panH = 0.34, panB = 0.25;
+        float sH = vP.y / helling;
+        float panH = 0.35, panB = 0.27;
         float rijD = floor(sH / panH);
         float uPan = u + mod(rijD, 2.0) * (panB * 0.5);
+        float kolD = floor(uPan / panB);
         vec2 fd = vec2(fract(uPan / panB), fract(sH / panH));
-        float fwU = max(fwidth(uPan / panB), 0.012);
-        float fwV = max(fwidth(sH / panH), 0.012);
-        float antiMoireD = 1.0 - smoothstep(0.18, 0.36, fwV);
-        float panRij = 1.0 - smoothstep(max(0.048, fwV * 1.0) - fwV, max(0.048, fwV * 1.0) + fwV, fd.y);
-        float panNaad = (1.0 - smoothstep(max(0.040, fwU * 1.0) - fwU, max(0.040, fwU * 1.0) + fwU, fd.x)) * 0.65;
-        float panLijn = max(panRij, panNaad);
-        k = mix(k, uInktKleur, panLijn * fadeD * antiMoireD * 0.50);
+        // Onderste 3 pannenrijen langs de goot (y < 4.90) + spaarzame hele dakpan-groepjes hoger op het dak
+        float bijGoot = 1.0 - smoothstep(4.72, 5.02, vP.y);
+        vec2 dCl = floor(vec2(kolD / 6.0, rijD / 5.0));
+        float dKans = klHash(vec3(dCl, 5.9));
+        vec2 inD = vec2(mod(kolD, 6.0), mod(rijD, 5.0));
+        float inDakCl = (dKans > 0.82 && inD.x >= 1.0 && inD.x <= 3.0 && inD.y >= 1.0 && inD.y <= 2.0 && klHash(vec3(kolD, rijD, 2.3)) > 0.42) ? 0.78 : 0.0;
+        float dakMask = clamp(max(bijGoot, inDakCl), 0.0, 1.0);
+        if (dakMask > 0.02) {
+          float fwU = max(fwidth(uPan / panB), 0.012);
+          float fwV = max(fwidth(sH / panH), 0.012);
+          float antiMoireD = 1.0 - smoothstep(0.18, 0.38, fwV);
+          float panRij = 1.0 - smoothstep(max(0.055, fwV) - fwV, max(0.055, fwV) + fwV, fd.y);
+          float panNaad = (1.0 - smoothstep(max(0.045, fwU) - fwU, max(0.045, fwU) + fwU, fd.x)) * 0.72;
+          k = mix(k, uInktKleur, max(panRij, panNaad) * dakMask * fadeD * antiMoireD * 0.62);
+        }
       }
 
-      // 0c. Rustige maanverlichte schaduwstroken langs de randen van het Monastic-erf (behoudt het lichte steengrijze grind!)
-      if (uNacht > 0.5 && n.y > 0.80 && isGrind && vP.x > 6.5 && vP.x < 28.5 && vP.z > -9.5 && vP.z < 5.5) {
-        float garageSchaduw = (1.0 - smoothstep(-2.45, -2.32, vP.z + (vP.x - 16.0) * 0.12)) * smoothstep(11.0, 11.15, vP.x);
-        float hegSchaduw = smoothstep(1.35, 1.48, vP.z - (vP.x - 16.0) * 0.16) * (1.0 - smoothstep(23.1, 23.22, vP.x));
-        float hoekDiep = clamp(max(garageSchaduw, hegSchaduw), 0.0, 1.0);
-        k = mix(k, k * vec3(0.68, 0.72, 0.80), hoekDiep * 0.65);
+      // 0c. HANDGETEKENDE STRIP-HAGEN (fijne getekende bladtakjes & tweekleurig gebladerte i.p.v. strakke CAD-doos!)
+      if (s == ${id.haag} && dist < 40.0) {
+        float fadeH = 1.0 - smoothstep(18.0, 38.0, dist);
+        // 2-toons gebladerte-volume: donkere onderrand + subtiele lichtere/donkere bladvlekken
+        float onder = 1.0 - smoothstep(0.20, 0.75, vP.y);
+        k = mix(k, k * 0.64, onder * 0.72);
+        vec3 tang = abs(n.y) < 0.5 ? normalize(vec3(-n.z, 0.0, n.x)) : vec3(1.0, 0.0, 0.0);
+        vec2 hUv = abs(n.y) < 0.5 ? vec2(dot(vP, tang) * 5.2, vP.y * 5.6) : (vP.xz * 4.8);
+        vec2 hCel = floor(hUv);
+        vec2 hF = fract(hUv) - 0.5;
+        float hK = klHash(vec3(hCel, 17.7));
+        // Organische bladtint-variatie op haagvlakken
+        float vlek = klRuis(vP * 3.1);
+        k *= mix(1.0, vlek > 0.58 ? 1.12 : (vlek < 0.32 ? 0.84 : 1.0), fadeH * 0.65);
+        // Fijne, kleine handgetekende bladboogjes (geen grove grote krullen!)
+        if (hK > 0.52) {
+          float ox = (klHash(vec3(hCel, 3.3)) - 0.5) * 0.25;
+          float oy = (klHash(vec3(hCel, 8.1)) - 0.5) * 0.25;
+          vec2 d = (hF - vec2(ox, oy)) * vec2(1.05, 1.35);
+          float r = length(d);
+          float fw = max(fwidth(r), 0.014);
+          float amH = 1.0 - smoothstep(0.24, 0.45, fw);
+          float boog = (1.0 - smoothstep(0.032 - fw, 0.032 + fw, abs(r - 0.22))) * step(-0.02, d.y);
+          k = mix(k, uInktKleur, boog * fadeH * amH * 0.62);
+        }
       }
 
-      // 0d. Handgetekende visgraatklinkers langs Monastic & lichte grindkorrels op het erf (zoals in paneel 1 & 3 van het 4-luik!)
-      if (isGrind && n.y > 0.85 && dist < 28.0) {
-        float fadeG = 1.0 - smoothstep(12.0, 26.0, dist);
-        // Strook van ~1,65 m langs de schuine achtergevel van Monastic (dn < 1.65 m): warme klinkerbestrating!
+      // 0d. DONKERBLAUWE HOUTEN GARAGEDEUR RECHTS OP HET ERF (tilt het zwarte vlak op naar leiblauw; de echte 3D planknaden doen de rest!)
+      if (s == ${id.zwart} && abs(n.y) < 0.3 && vP.x > 15.5 && vP.x < 19.5 && vP.z > -6.0 && vP.z < -3.0 && vP.y > 0.05 && vP.y < 3.25) {
+        vec3 deurKl = uNacht > 0.5 ? vec3(0.12, 0.18, 0.24) : vec3(0.21, 0.27, 0.32);
+        // Subtiele verticale licht/schaduw-verloop onder de dakgoot
+        float bovenS = smoothstep(2.45, 2.95, vP.y);
+        k = mix(deurKl, deurKl * 0.72, bovenS * 0.65);
+      }
+
+      // 0e. ECHTE 45° VISGRAATKLINKERS LANGS HEEL MONASTIC (tot voorbij de dubbele deuren & intercom!) + STRIP-GRIND!
+      bool opVisgraat = false;
+      if ((isGrind || s == ${id.stoep}) && n.y > 0.85 && dist < 44.0) {
+        float fadeG = 1.0 - smoothstep(24.0, 42.0, dist);
         float dnErf = (vP.x - 8.16) * 0.8364 + (vP.z + 1.52) * (-0.5481);
         float dsErf = (vP.x - 8.16) * 0.5481 + (vP.z + 1.52) * 0.8364;
-        if (dnErf > -0.25 && dnErf < 1.68 && dsErf > -2.0 && dsErf < 8.6) {
-          vec3 klinkTint = uNacht > 0.5 ? vec3(0.32, 0.34, 0.39) : vec3(0.74, 0.66, 0.58);
-          k = mix(k, klinkTint, 0.72);
+        if (dnErf > -0.35 && dnErf < 1.95 && dsErf > -2.5 && dsErf < 9.2) {
+          opVisgraat = true;
+          // Warme klinkerkleur + strakke opsluitband tussen terras en grind
+          vec3 klinkTint = uNacht > 0.5 ? vec3(0.41, 0.39, 0.44) : vec3(0.75, 0.65, 0.56);
+          k = mix(k, klinkTint, 0.82);
           float fwR = max(fwidth(dnErf), 0.008);
-          float randLijn = 1.0 - smoothstep(0.025 - fwR, 0.025 + fwR, abs(dnErf - 1.65));
-          k = mix(k, uInktKleur, randLijn * fadeG * 0.78);
-          vec2 kUv = vec2(dnErf * 4.4, dsErf * 2.2);
-          float rK = floor(kUv.x);
-          vec2 kf = vec2(fract(kUv.x), fract(kUv.y + mod(rK, 2.0) * 0.5));
-          float fwX = max(fwidth(kUv.x), 0.014), fwZ = max(fwidth(kUv.y), 0.014);
-          float am = 1.0 - smoothstep(0.24, 0.45, max(fwX, fwZ));
-          float kx = 1.0 - smoothstep(max(0.055, fwX) - fwX, max(0.055, fwX) + fwX, kf.x);
-          float kz = 1.0 - smoothstep(max(0.048, fwZ) - fwZ, max(0.048, fwZ) + fwZ, kf.y);
-          k = mix(k, uInktKleur, max(kx, kz * 0.75) * fadeG * am * 0.42);
-        } else {
-          // Buiten de klinkerstrook: fijne handgetekende Kuifje-grindstreepjes & steentjes over het erf!
-          vec2 gCel = floor(vP.xz * 2.4);
-          vec2 gF = fract(vP.xz * 2.4);
+          float randLijn = 1.0 - smoothstep(0.026 - fwR, 0.026 + fwR, abs(dnErf - 1.92));
+          k = mix(k, uInktKleur, randLijn * fadeG * 0.86);
+          // Echte 45° diagonale visgraat (afwisselende steentjes van 2:1 verhouding, helder leesbaar langs de hele gevel!)
+          vec2 p45 = vec2(dnErf + dsErf, dnErf - dsErf) * 3.35;
+          vec2 cel = floor(p45);
+          vec2 fr = fract(p45);
+          float par = mod(cel.x + cel.y, 2.0);
+          float diagX = par < 0.5 ? fr.x : fr.y;
+          float diagY = par < 0.5 ? fract(p45.y * 0.5 + floor(p45.x) * 0.5) : fract(p45.x * 0.5 + floor(p45.y) * 0.5);
+          float fwA = max(fwidth(p45.x), 0.012), fwB = max(fwidth(p45.y), 0.012);
+          float am = 1.0 - smoothstep(0.48, 0.90, max(fwA, fwB));
+          float lx = 1.0 - smoothstep(max(0.072, fwA) - fwA, max(0.072, fwA) + fwA, diagX);
+          float ly = 1.0 - smoothstep(max(0.052, fwB * 0.5) - fwB * 0.5, max(0.052, fwB * 0.5) + fwB * 0.5, diagY);
+          // Subtiele warme per-klinker kleurvariatie + scherpe inktvoeg!
+          float kHash = klHash(vec3(floor(p45.x), floor(p45.y), 3.7));
+          k *= 1.0 + (kHash - 0.5) * 0.14 * fadeG * am;
+          k = mix(k, uInktKleur, max(lx, ly) * fadeG * am * 0.62);
+        } else if (isGrind && dist < 30.0) {
+          float fadeK = 1.0 - smoothstep(14.0, 28.0, dist);
+          // Buiten de klinkerstrook: natuurlijke losse grindstipjes & kiezeltjes (zoals paneel 1 van variant 2!)
+          vec2 gCel = floor(vP.xz * 2.8);
+          vec2 gF = fract(vP.xz * 2.8);
           float hC = klHash(vec3(gCel, 9.4));
-          if (hC > 0.74) {
-            float ox = 0.22 + 0.56 * klHash(vec3(gCel, 1.7));
-            float oz = 0.22 + 0.56 * klHash(vec3(gCel, 5.3));
-            float fw = max(fwidth(gF.y), 0.008);
-            float streep = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(gF.y - oz)))
-                         * (1.0 - smoothstep(0.10 - fw, 0.10 + fw, abs(gF.x - ox)));
-            k = mix(k, uInktKleur, streep * fadeG * 0.52);
+          if (hC > 0.72) {
+            float ox = 0.20 + 0.60 * klHash(vec3(gCel, 1.7));
+            float oz = 0.20 + 0.60 * klHash(vec3(gCel, 5.3));
+            float d = length((gF - vec2(ox, oz)) * vec2(1.0, 1.45));
+            float fw = max(fwidth(d), 0.010);
+            float kiezel = 1.0 - smoothstep(0.042 - fw, 0.042 + fw, d);
+            k = mix(k, uInktKleur, kiezel * fadeK * 0.52);
           }
         }
-      } else if ((s == ${id.stoep} || s == ${id.straat}) && n.y > 0.85 && dist < 24.0) {
+      }
+      if (!opVisgraat && (s == ${id.stoep} || s == ${id.straat}) && n.y > 0.85 && dist < 24.0) {
         float fadeS = 1.0 - smoothstep(10.0, 22.0, dist);
         if (s == ${id.stoep}) {
           vec2 tCel = floor(vP.xz * 1.65);
@@ -337,38 +412,35 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
             k = mix(k, uInktKleur, voeg * fadeS * 0.45);
           }
         }
-        // Enkele platte herfstblaadjes op stoep en straatrand (paneel 4 van het 4-luik — nooit zwevend!)
-        vec2 bCel = floor(vP.xz * 1.45);
-        vec2 bF = fract(vP.xz * 1.45);
+        // Enkele platte herfstblaadjes op stoep en straatrand (paneel 4 van beide 4-luiken!)
+        vec2 bCel = floor(vP.xz * 1.35);
+        vec2 bF = fract(vP.xz * 1.35);
         float hB = klHash(vec3(bCel, 27.3));
-        if (hB > 0.90) {
+        if (hB > 0.88) {
           float ox = 0.22 + 0.56 * klHash(vec3(bCel, 3.1));
           float oz = 0.22 + 0.56 * klHash(vec3(bCel, 6.7));
           vec2 d = (bF - vec2(ox, oz)) * vec2(1.0, 1.75);
           float r = length(d);
           float fw = max(fwidth(r), 0.008);
-          float inBlad = 1.0 - smoothstep(0.052 - fw, 0.052 + fw, r);
-          float randBlad = 1.0 - smoothstep(0.016 - fw, 0.016 + fw, abs(r - 0.052));
-          vec3 bladKl = uNacht > 0.5 ? vec3(0.42, 0.27, 0.16) : vec3(0.72, 0.44, 0.19);
-          k = mix(k, bladKl, inBlad * fadeS * 0.85);
-          k = mix(k, uInktKleur, randBlad * fadeS * 0.82);
+          float inBlad = 1.0 - smoothstep(0.058 - fw, 0.058 + fw, r);
+          float randBlad = 1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(r - 0.058));
+          vec3 bladKl = uNacht > 0.5 ? vec3(0.48, 0.30, 0.17) : vec3(0.72, 0.44, 0.19);
+          k = mix(k, bladKl, inBlad * fadeS * 0.88);
+          k = mix(k, uInktKleur, randBlad * fadeS * 0.85);
         }
       }
 
-      // 1. Subtiele, verfijnde maanlichtreflectie op dakvlakken naar de maan (NOOIT fel wit/blauw — subtiel als op de referentieplaat!)
+      // 1. Subtiele, verfijnde maanlichtreflectie op dakvlakken naar de maan (NOOIT fel wit/blauw!)
       if (uNacht > 0.5 && isDak && n.y > 0.20) {
         float maanDot = dot(n, uMaanDir);
         if (maanDot > 0.16) {
           float hoog = smoothstep(4.2, 10.5, vP.y);
           float sterk = smoothstep(0.16, 0.34, maanDot) * (0.08 + 0.10 * hoog);
-          k = mix(k, vec3(0.32, 0.43, 0.55), sterk * uNacht);
+          k = mix(k, vec3(0.32, 0.44, 0.56), sterk * uNacht);
         }
       }
 
       // 2. Ruiten:
-      //    - Blaricumsche Boekhandel ('ruit_kantoor'): 's avonds gedempt donker glas met alleen zachte, warme etalageverlichting onderin!
-      //    - Brandende ramen ('ruit_aan', 'raamlicht'): warm honinggoud (exact de rijke warmte uit de 4-luik collage!).
-      //    - Donkere ramen: diep nachtblauw met subtiele koele reflectie.
       if (isRuit && abs(n.y) < 0.85) {
         float diag = (vP.x * 0.62 - vP.z * 0.58) + vP.y * 1.15;
         float g = fract(diag * 0.36);
@@ -377,7 +449,6 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         float band2 = smoothstep(0.29 - fw, 0.29 + fw, g) * (1.0 - smoothstep(0.33 - fw, 0.33 + fw, g));
         float glans = clamp(band1 + band2, 0.0, 1.0);
         if (uBrandt < 0.5) {
-          // Overdag koel fris stripglas (ook voor de Monastic-ramen zodat ze overdag geen geel licht geven!)
           vec3 dagGlas = isBrandRuit ? vec3(0.28, 0.39, 0.48) : k;
           vec3 hemelGlans = mix(dagGlas, vec3(0.88, 0.93, 0.96), 0.42);
           k = mix(dagGlas, hemelGlans, glans);
@@ -386,7 +457,6 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
             k = mix(k, k * 0.78, boven);
           }
         } else if (isBoekRuit) {
-          // Gedempte avond-etalage van de Blaricumsche Boekhandel: donker winkelglas met alleen subtiele warme onderverlichting!
           vec3 donkerWinkel = vec3(0.10, 0.15, 0.21);
           float onderEtalage = (1.0 - smoothstep(1.35, 2.25, vP.y)) * smoothstep(0.42, 0.56, vP.y);
           float spotGolf = 0.5 + 0.5 * sin(vP.x * 0.95 + vP.z * 0.65);
@@ -395,9 +465,8 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           k = mix(donkerWinkel, warmEtalage, onderEtalage * (0.28 + 0.42 * spot));
           k = mix(k, vec3(0.24, 0.34, 0.44), glans * 0.34);
         } else if (isBrandRuit) {
-          // Warm honinggoud interieurlicht zoals in de 4-luik collage (rijke amber-gloed per ruitje!)
-          vec3 honing = vec3(0.96, 0.77, 0.35);
-          vec3 hart = vec3(0.99, 0.88, 0.54);
+          vec3 honing = vec3(0.96, 0.78, 0.36);
+          vec3 hart = vec3(0.99, 0.90, 0.58);
           k = mix(honing, hart, glans * 0.45);
         } else {
           float maanRuit = smoothstep(0.10, 0.45, dot(n, uMaanDir));
@@ -406,11 +475,11 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         }
       }
 
-      // 3. Lamplicht bij nacht: straatlantaarns, zachte warme gloed op baksteen rond wandlamp & verlichte erfdeuren, & Porsche-koplampen.
+      // 3. Lamplicht bij nacht: gefocuste goudgele lantaarncirkels, warme gevelgloed & koplampen.
       if (!isBrandRuit && !isBoekRuit) {
         float lp = klLamp(vP, n);
         if (lp > 0.001) {
-          vec3 warmSpill = abs(n.y) < 0.45 ? mix(k * vec3(1.55, 1.32, 0.92), vec3(0.95, 0.72, 0.36), 0.38) : uLampKleur;
+          vec3 warmSpill = abs(n.y) < 0.45 ? mix(k * vec3(1.58, 1.34, 0.90), vec3(0.96, 0.76, 0.38), 0.40) : uLampKleur;
           k = mix(k, warmSpill, lp);
         }
       }
@@ -459,9 +528,7 @@ const rompShader = (vakken, palet, id) => new THREE.ShaderMaterial({
       vec3 n = normalize(vN);
       int s = int(vVak.x + 0.5);
       float rand = uKlare > 0.5 ? 0.12 : (-0.12 + 0.16 * klRuis(vP * 1.7));
-      bool licht = uKlare > 0.5
-        ? (vVak.y > 0.5 && dot(n, uZon) > rand)
-        : (vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32));
+      bool licht = vVak.y > 0.5 && dot(n, uZon) > rand && !klSlag(vP, n, 0.32);
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
 
       // Zuivere Ligne Claire Porsche-lak (zoals de rode Porsche op het voorbeeld!):
@@ -712,7 +779,6 @@ const diepteMat = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.D
 let slagMeshes = [];
 
 function slagKaart() {
-  if (LICHT.uKlare.value > 0.5) return;
   const z = LICHT.uZon.value;
   slagVeld = Math.min(280, Math.max(55, camera.position.distanceTo(stuur.target) * 1.25));
   slagMidden.copy(stuur.target).setY(0);
@@ -2476,7 +2542,7 @@ async function begin() {
     [10.02, 1.95, 0.42, 2.65],   // warme gloed vanuit de centrale dubbele erfdeur & zijlichten
     [11.96, 2.38, 3.52, 1.85],   // warme gloed vanuit het 4x2 bovenlicht van de linker paneeldeur
   ];
-  const kringen = [...(model.lampen || []).map((q) => [...q, 5.9]), ...wandLantaarn, ...etalageGloed].slice(0, 40);
+  const kringen = [...(model.lampen || []).map((q) => [...q, 4.25]), ...wandLantaarn, ...etalageGloed].slice(0, 40);
   kringen.forEach((q, i) => LICHT.uLamp.value[i].set(q[0], q[1], q[2], q[3]));
   LICHT.uLampN.value = kringen.length;
 
