@@ -165,22 +165,20 @@ const SLAGCODE = `
         }
       }
     }
-    // 2. Strakke grafische lichtbundel uit de centrale Monastic-erfdeuren & gangraampje over de visgraatklinkers (paneel 3!).
-    if (p.y < 0.35 && n.y > 0.65 && p.x > 7.5 && p.x < 14.8 && p.z > -3.0 && p.z < 5.5) {
+    // 2. Strakke grafische hal-lichtwig uit de Monastic-haldeur over de visgraatklinkers: ALLEEN zodra de halverlichting aanspringt!
+    if (uGangLicht > 0.05 && p.y < 0.35 && n.y > 0.65 && p.x > 7.2 && p.x < 14.5 && p.z > -3.5 && p.z < 4.5) {
       float dnE = (p.x - 8.16) * 0.8364 + (p.z + 1.52) * (-0.5481);
       float dsE = (p.x - 8.16) * 0.5481 + (p.z + 1.52) * 0.8364;
-      // Grafische goudgele lichtwig recht vóór de dubbele openslaande erfdeuren (ds = 1.5..3.8, dn = 0..2.8 m)
-      float halBreed = 1.05 + dnE * 0.32;
-      if (dnE > -0.1 && dnE < 2.95 && abs(dsE - 2.63) < halBreed) {
-        float wFade = 1.0 - smoothstep(1.9, 2.95, dnE);
-        float kern = abs(dsE - 2.63) < (0.72 + dnE * 0.18) ? 0.62 : 0.34;
-        k = max(k, kern * wFade);
+      // Scherpe goudgele hal-lichtwig uit de smalle entree naast de intercom (ds = -0.6..1.1, dn = 0..2.6 m)
+      float halBreed = 0.72 + dnE * 0.28;
+      if (dnE > -0.15 && dnE < 2.75 && abs(dsE - 0.35) < halBreed) {
+        float wFade = 1.0 - smoothstep(1.65, 2.75, dnE);
+        float kern = abs(dsE - 0.35) < (0.46 + dnE * 0.16) ? 0.68 : 0.36;
+        k = max(k, kern * wFade * uGangLicht);
       }
-      if (uGangLicht > 0.05) {
-        vec2 dg = p.xz - vec2(9.2, -1.25);
-        float dr = length(dg * vec2(0.55, 0.85));
-        k = max(k, pow(1.0 - smoothstep(0.0, 1.55, dr), 1.4) * 0.56 * uGangLicht);
-      }
+      vec2 dg = p.xz - vec2(8.85, -1.25);
+      float dr = length(dg * vec2(0.65, 0.85));
+      k = max(k, pow(1.0 - smoothstep(0.0, 1.85, dr), 1.35) * 0.52 * uGangLicht);
     }
     // 3. Porsche-koplampbundels op het wegdek: strakke Ligne Claire-lichtbundels vóór de voorbumper.
     if (uKopAan > 0.05 && p.y < 0.34 && n.y > 0.65) {
@@ -400,33 +398,60 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           }
         }
       }
-      if (!opVisgraat && (s == ${id.stoep} || s == ${id.straat}) && n.y > 0.85 && dist < 24.0) {
-        float fadeS = 1.0 - smoothstep(10.0, 22.0, dist);
-        if (s == ${id.stoep}) {
-          vec2 tCel = floor(vP.xz * 1.65);
-          vec2 tF = fract(vP.xz * 1.65);
-          float hT = klHash(vec3(tCel, 14.2));
-          if (hT > 0.80) {
-            float fw = max(fwidth(tF.x), 0.008);
-            float voeg = (1.0 - smoothstep(0.016 - fw, 0.016 + fw, tF.x)) * step(0.18, tF.y) * step(tF.y, 0.82);
-            k = mix(k, uInktKleur, voeg * fadeS * 0.45);
+      if (!opVisgraat && (s == ${id.stoep} || s == ${id.straat} || s == ${id.parkeervak}) && n.y > 0.85 && dist < 44.0) {
+        if ((s == ${id.straat} || s == ${id.parkeervak})) {
+          // Blaricum centrum klinkerstraten: rustig egaal klinkervlak met spaarzame 45° visgraat-veldjes (puur Klare Lijn!)
+          float fadeK = 1.0 - smoothstep(20.0, 42.0, dist);
+          vec2 pS = vec2(vP.x + vP.z, vP.x - vP.z) * 2.35;
+          vec2 celS = floor(pS);
+          vec2 frS = fract(pS);
+          vec2 clS = floor(celS / 5.0);
+          vec2 inCl = mod(celS, 5.0);
+          float clK = klHash(vec3(clS, 31.7));
+          float stK = klHash(vec3(celS, 11.9));
+          bool inKlinkVeld = clK > 0.71 && inCl.x >= 1.0 && inCl.x <= 3.0 && inCl.y >= 1.0 && inCl.y <= 3.0 && stK > 0.30;
+          if (inKlinkVeld && fadeK > 0.02) {
+            float parS = mod(celS.x + celS.y, 2.0);
+            float dX = parS < 0.5 ? frS.x : frS.y;
+            float dY = parS < 0.5 ? fract(pS.y * 0.5 + celS.x * 0.5) : fract(pS.x * 0.5 + celS.y * 0.5);
+            float fwX = max(fwidth(pS.x), 0.012), fwY = max(fwidth(pS.y), 0.012);
+            float amS = 1.0 - smoothstep(0.38, 0.72, max(fwX, fwY));
+            float lx = 1.0 - smoothstep(max(0.068, fwX) - fwX, max(0.068, fwX) + fwX, dX);
+            float ly = 1.0 - smoothstep(max(0.052, fwY * 0.5) - fwY * 0.5, max(0.052, fwY * 0.5) + fwY * 0.5, dY);
+            // Subtiele lichte/donkere klinkertint + strakke zwarte penvoeg
+            float kToon = stK > 0.70 ? 1.12 : (stK < 0.45 ? 0.88 : 1.0);
+            k *= mix(1.0, kToon, fadeK * amS * 0.65);
+            k = mix(k, uInktKleur, max(lx, ly) * fadeK * amS * 0.58);
           }
         }
-        // Enkele platte herfstblaadjes op stoep en straatrand (paneel 4 van beide 4-luiken!)
-        vec2 bCel = floor(vP.xz * 1.35);
-        vec2 bF = fract(vP.xz * 1.35);
-        float hB = klHash(vec3(bCel, 27.3));
-        if (hB > 0.88) {
-          float ox = 0.22 + 0.56 * klHash(vec3(bCel, 3.1));
-          float oz = 0.22 + 0.56 * klHash(vec3(bCel, 6.7));
-          vec2 d = (bF - vec2(ox, oz)) * vec2(1.0, 1.75);
-          float r = length(d);
-          float fw = max(fwidth(r), 0.008);
-          float inBlad = 1.0 - smoothstep(0.058 - fw, 0.058 + fw, r);
-          float randBlad = 1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(r - 0.058));
-          vec3 bladKl = uNacht > 0.5 ? vec3(0.48, 0.30, 0.17) : vec3(0.72, 0.44, 0.19);
-          k = mix(k, bladKl, inBlad * fadeS * 0.88);
-          k = mix(k, uInktKleur, randBlad * fadeS * 0.85);
+        if (dist < 24.0) {
+          float fadeS = 1.0 - smoothstep(10.0, 22.0, dist);
+          if (s == ${id.stoep}) {
+            vec2 tCel = floor(vP.xz * 1.65);
+            vec2 tF = fract(vP.xz * 1.65);
+            float hT = klHash(vec3(tCel, 14.2));
+            if (hT > 0.80) {
+              float fw = max(fwidth(tF.x), 0.008);
+              float voeg = (1.0 - smoothstep(0.016 - fw, 0.016 + fw, tF.x)) * step(0.18, tF.y) * step(tF.y, 0.82);
+              k = mix(k, uInktKleur, voeg * fadeS * 0.45);
+            }
+          }
+          // Enkele platte herfstblaadjes op stoep en straatrand
+          vec2 bCel = floor(vP.xz * 1.35);
+          vec2 bF = fract(vP.xz * 1.35);
+          float hB = klHash(vec3(bCel, 27.3));
+          if (hB > 0.88) {
+            float ox = 0.22 + 0.56 * klHash(vec3(bCel, 3.1));
+            float oz = 0.22 + 0.56 * klHash(vec3(bCel, 6.7));
+            vec2 d = (bF - vec2(ox, oz)) * vec2(1.0, 1.75);
+            float r = length(d);
+            float fw = max(fwidth(r), 0.008);
+            float inBlad = 1.0 - smoothstep(0.058 - fw, 0.058 + fw, r);
+            float randBlad = 1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(r - 0.058));
+            vec3 bladKl = uNacht > 0.5 ? vec3(0.48, 0.30, 0.17) : vec3(0.72, 0.44, 0.19);
+            k = mix(k, bladKl, inBlad * fadeS * 0.88);
+            k = mix(k, uInktKleur, randBlad * fadeS * 0.85);
+          }
         }
       }
 
@@ -440,7 +465,10 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         }
       }
 
-      // 2. Ruiten:
+      // 2. Ruiten: bij Monastic staat het pand donker bij aankomst — alleen de halverlichting (bij de intercom) springt aan op uGangLicht!
+      bool isMonastic = (vP.x > 0.5 && vP.x < 16.5 && vP.z > -9.5 && vP.z < 9.5);
+      bool isHalRuit = isMonastic && vP.x > 6.8 && vP.x < 8.92 && vP.z > -2.85 && vP.z < -0.62 && vP.y < 3.55;
+      bool ruitBrandtNu = isBrandRuit && (!isMonastic || (isHalRuit && uGangLicht > 0.05));
       if (isRuit && abs(n.y) < 0.85) {
         float diag = (vP.x * 0.62 - vP.z * 0.58) + vP.y * 1.15;
         float g = fract(diag * 0.36);
@@ -464,6 +492,14 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           vec3 warmEtalage = vec3(0.48, 0.38, 0.23);
           k = mix(donkerWinkel, warmEtalage, onderEtalage * (0.28 + 0.42 * spot));
           k = mix(k, vec3(0.24, 0.34, 0.44), glans * 0.34);
+        } else if (isMonastic) {
+          float maanRuit = smoothstep(0.10, 0.45, dot(n, uMaanDir));
+          vec3 donkerKantoor = vec3(0.08, 0.14, 0.21);
+          vec3 spiegel = mix(vec3(0.19, 0.30, 0.40), vec3(0.31, 0.44, 0.56), maanRuit);
+          vec3 kUit = mix(donkerKantoor, spiegel, glans * 0.44);
+          vec3 kAan = mix(vec3(0.96, 0.78, 0.36), vec3(0.99, 0.90, 0.58), glans * 0.45);
+          float halAan = isHalRuit ? uGangLicht : 0.0;
+          k = mix(kUit, kAan, halAan);
         } else if (isBrandRuit) {
           vec3 honing = vec3(0.96, 0.78, 0.36);
           vec3 hart = vec3(0.99, 0.90, 0.58);
@@ -476,7 +512,7 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       }
 
       // 3. Lamplicht bij nacht: gefocuste goudgele lantaarncirkels, warme gevelgloed & koplampen.
-      if (!isBrandRuit && !isBoekRuit) {
+      if (!ruitBrandtNu && !isBoekRuit && !isRuit) {
         float lp = klLamp(vP, n);
         if (lp > 0.001) {
           vec3 warmSpill = abs(n.y) < 0.45 ? mix(k * vec3(1.58, 1.34, 0.90), vec3(0.96, 0.76, 0.38), 0.40) : uLampKleur;
@@ -1985,45 +2021,18 @@ function stopRondleiding() {
 }
 
 const kaderEl = document.querySelector('.kader');
-const celLaagEl = document.getElementById('cel-laag');
 const celDeurLaagEl = document.getElementById('cel-deur-laag');
+const celDeurFrames = [
+  document.getElementById('cel-deur-0'),
+  document.getElementById('cel-deur-1'),
+  document.getElementById('cel-deur-2'),
+];
 const bijschriftEl = document.getElementById('strip-bijschrift');
 const ballonEl = document.getElementById('strip-ballon');
 const ballonSprekerEl = document.getElementById('ballon-spreker');
 const ballonTekstEl = document.getElementById('ballon-tekst');
 const keuzeEl = document.getElementById('verhaal-keuze');
 const overslaanKnop = document.getElementById('overslaan-knop');
-
-// Het interactieve Kuifje-verhaal "Het Geheim van de Meentweg" — drie dossiers gekoppeld aan het echte aanbod van Monastic.
-const DOSSIERS = {
-  website: {
-    label: 'Dossier I',
-    titel: 'De Nieuwe Website',
-    sub: 'Eigen ontwerp, vaste prijs vanaf € 1.450',
-    reactie: '“Geen standaard sjabloon, wel een vaste prijs. Precies wat deze zaak nodig heeft!”',
-    maker: '“Goedenavond! Een eigen ontwerp voor een vaste prijs — kom verder, dan zetten we de eerste lijnen op papier.”',
-    url: 'https://monastic.nl/websites/',
-    urlLabel: 'Bekijk website-pakketten ↗',
-  },
-  wordpress: {
-    label: 'Dossier II',
-    titel: 'De WordPress-Zaak',
-    sub: 'Check met herstel (€ 249) of overstappen',
-    reactie: '“Drieëntwintig plugins en een kier in de achterdeur… hoog tijd dat de maker kijkt!”',
-    maker: '“Aha, een WordPress-dossier! Geen zorgen: binnen vijf dagen heb je een helder rapport, of we stappen over.”',
-    url: 'https://monastic.nl/wordpress/',
-    urlLabel: 'Bekijk de WordPress-check ↗',
-  },
-  ai3d: {
-    label: 'Dossier III',
-    titel: 'AI & 3D-Maatwerk',
-    sub: 'AI-kansenscan (€ 495) of interactieve 3D',
-    reactie: '“Een heel dorp in de browser — als zij dát bouwen, kunnen ze onze zaak ook oplossen!”',
-    maker: '“Spannend dossier! Of het nu een AI-kansenscan of 3D-maatwerk wordt — hier spreek je rechtstreeks met de maker.”',
-    url: 'https://monastic.nl/websites/',
-    urlLabel: 'Bekijk AI-scan & maatwerk ↗',
-  },
-};
 
 let laatsteBallonSleutel = '';
 let laatsteKeuzeSleutel = '';
@@ -2042,7 +2051,6 @@ function toonBallon(sprekerCode, sprekerNaam, tekst) {
     ballonEl.dataset.spreker = sprekerCode || '';
     if (ballonSprekerEl) ballonSprekerEl.textContent = sprekerNaam || '';
     if (ballonTekstEl) ballonTekstEl.textContent = tekst;
-    // Herstart subtiele pop-animatie bij nieuwe spreker
     ballonEl.hidden = true;
     void ballonEl.offsetWidth;
   }
@@ -2073,11 +2081,18 @@ function toonKeuzes(sleutel, items) {
   keuzeEl.hidden = isAfdruk && !window._toonUIInAfdruk;
 }
 
-function zetRegieUI(inRegie, celStand = 'uit', bijschrift = '') {
+function zetDeurCelFrame(idx) {
+  celDeurFrames.forEach((el, i) => {
+    if (el) el.hidden = i !== idx;
+  });
+}
+
+function zetRegieUI(inRegie, celStand = 'uit', bijschrift = '', deurFrame = 2) {
   stuur.enabled = !inRegie;
   if (kaderEl) kaderEl.classList.toggle('in-regie', inRegie);
-  if (celLaagEl) celLaagEl.hidden = celStand !== 'porsche';
-  if (celDeurLaagEl) celDeurLaagEl.hidden = celStand !== 'deur';
+  const toonDeur = celStand === 'deur';
+  if (celDeurLaagEl) celDeurLaagEl.hidden = !toonDeur;
+  if (toonDeur) zetDeurCelFrame(deurFrame);
   if (bijschriftEl) {
     bijschriftEl.hidden = !bijschrift || (isAfdruk && !window._toonUIInAfdruk);
     if (bijschrift) bijschriftEl.textContent = bijschrift;
@@ -2107,13 +2122,12 @@ function stopIntro(autoParkeren = false) {
   if (wasActief) werkCartoucheBij();
 }
 
-// ---- Kuifje / Ligne Claire 5-Scènes Interactief Verhaal ("Het Geheim van de Meentweg") -> naadloos vrij 3D rondkijken:
-//   1 (0.00–0.26) Torenlaan & kruising: de leiblauwe Porsche 930 met draaiende wielen, koplampkegels & bewegingsstrepen.
-//   2 (0.26–0.51) In de Porsche (2D duo-cel vóór live 3D Meentweg) + KEUZE 1 (3 Monastic-dossiers) + reactie bestuurder!
-//   3 (0.51–0.70) Het donkere erf op: natuurlijke inrit zonder rare 90°-draai, warme wandlantaarn & koplampen uit.
-//   4 (0.70–0.91) De schaduw & aanbellen: zwarte hoed-schaduw op de baksteenmuur + 2D Kuifje-hand op MONASTIC -> TRRRING!
-//   5 (deur)      De achterdeur opent (2D Maker-cel) met antwoord op jouw dossier + KEUZE 2 (vrij 3D / ander dossier / site).
-//   6 (0.91–1.00) Vrij 3D: camera zwaait vloeiend uit over het maanverlichte erf met geparkeerde Porsche & brandend gangraampje.
+// ---- Film-noir openingsscène "De late afspraak" (geen gezichten, vaste vlotte shots, 3-frame limited cel):
+//   1 (0.00–0.44) Vaste camera op de klinker-kruising: de 930 zoeft vlot voorbij de handwijzer & lantaarn.
+//   2 (0.44–0.72) Vaste lage camera op het donkere Monastic-erf: auto draait het grind op en dooft koplampen; pand is donker.
+//   3 (0.72–0.91) Close-up intercom: gezichtloze schaduw langs de bakstenen muur + hand drukt op de bel (TRRRING!).
+//   4 (deur)      3-frame pixel-gelockte limited cel: donkere hal-deur -> KLIK halverlichting aan -> anonieme schim achter glas.
+//   5 (0.91–1.00) Outro: vloeiend uitzwaaien over het donkere erf met ALLEEN de halverlichting aan -> vrij 3D!
 const hoekVoorScherm = (h) => (camera.aspect < 1 ? Math.min(62, h + 15) : h);
 const smooth01 = (x) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
 const MUUR_RECHTS = new THREE.Vector3(INTERCOM_NORMAAL.z, 0, -INTERCOM_NORMAAL.x);
@@ -2121,122 +2135,95 @@ const tmpBelPos = new THREE.Vector3();
 const tmpUitOog = new THREE.Vector3();
 const tmpUitDoel = new THREE.Vector3();
 
-function pasIntroFrameToe(tNorm, celOverride = null) {
+function pasIntroFrameToe(tNorm, celOverride = null, deurFrame = 2) {
   const c = Math.max(0, Math.min(1, tNorm));
 
-  // 1. Porsche rijdt over c = 0.00..0.68 pal over het asfalt en vloeiend het grind op.
-  const pT = Math.min(1, c / 0.68);
-  const inAutoCel = celOverride ? celOverride === 'porsche' : (c >= 0.26 && c < 0.51);
+  // 1. Porsche-tempo: vlot over de klinkerstraat (0.00..0.44 -> pT 0.05..0.52) en vloeiend het donkere erf op (0.44..0.72 -> pT 0.68..1.00).
+  let pT = 1.0;
+  if (c < 0.44) {
+    pT = 0.05 + (c / 0.44) * 0.47;
+  } else if (c < 0.72) {
+    pT = 0.68 + smooth01((c - 0.44) / 0.25) * 0.32;
+  }
   if (porsche) {
-    porsche.group.visible = !inAutoCel;
-    const lichtAan = c < 0.665 ? 1.0 : Math.max(0, 1 - (c - 0.665) / 0.03);
+    porsche.group.visible = celOverride !== 'deur';
+    const lichtAan = c < 0.68 ? 1.0 : Math.max(0, 1 - (c - 0.68) / 0.032);
     porsche.zetMotorLicht(lichtAan);
-    porsche.zetIntroStand(pT);
+    porsche.zetIntroStand(Math.min(1, pT));
   }
 
-  // 2. Intercom, film-noir muurschaduw & 2D Kuifje-aanbelcel (Shot 4)
+  // 2. Intercom, gezichtloze muurschaduw & aanbel-hand (Shot 3); halverlichting blijft UIT tot na het aanbellen!
   let belDruk = 0, belRingT = 0, raamAan = 0, schaduwT = -1, reik = 0;
   if (intercom && belHand) {
     const belWereld = intercom.belWereldPositie(tmpBelPos);
-    if (c >= 0.70 && c < 0.91) {
-      schaduwT = Math.max(0, Math.min(1, (c - 0.70) / 0.19));
-      if (c >= 0.785 && c < 0.835) reik = smooth01((c - 0.785) / 0.05);
-      else if (c >= 0.835 && c < 0.865) reik = 1.0;
-      else if (c >= 0.865 && c < 0.905) reik = 1.0 - smooth01((c - 0.865) / 0.04);
-      belDruk = (c >= 0.835 && c < 0.865) ? smooth01(Math.sin(((c - 0.835) / 0.03) * Math.PI)) : 0;
-      belRingT = c >= 0.84 ? Math.min(1, (c - 0.84) / 0.04) : 0;
-      raamAan = c >= 0.855 ? smooth01((c - 0.855) / 0.035) : 0;
+    if (c >= 0.72 && c < 0.91) {
+      schaduwT = Math.max(0, Math.min(1, (c - 0.72) / 0.18));
+      if (c >= 0.79 && c < 0.84) reik = smooth01((c - 0.79) / 0.05);
+      else if (c >= 0.84 && c < 0.87) reik = 1.0;
+      else if (c >= 0.87 && c < 0.905) reik = 1.0 - smooth01((c - 0.87) / 0.035);
+      belDruk = (c >= 0.84 && c < 0.87) ? smooth01(Math.sin(((c - 0.84) / 0.03) * Math.PI)) : 0;
+      belRingT = c >= 0.845 ? Math.min(1, (c - 0.845) / 0.04) : 0;
+      // Pas in Shot 4 (limited cel Beat 1) klikt de halverlichting echt aan — hier blijft het spannend donker!
+      raamAan = 0;
     } else if (c >= 0.91) {
       raamAan = 1.0;
       gangLichtAan = 1.0;
     }
-    LICHT.uGangLicht.value = Math.max(raamAan, gangLichtAan) * LICHT.uBrandt.value;
+    const halEff = c >= 0.91 ? Math.max(raamAan, gangLichtAan) : 0;
+    LICHT.uGangLicht.value = halEff * LICHT.uBrandt.value;
     belHand.zetReik(reik, belWereld);
-    intercom.zetStaat(LICHT.uBrandt.value, belDruk, belRingT, raamAan, schaduwT);
+    intercom.zetStaat(LICHT.uBrandt.value, belDruk, belRingT, halEff, schaduwT);
   }
 
-  // 3. Camera-regie per scène
+  // 3. Strakke film-noir camera-regie (vaste statische shots!)
   let bijschrift = '';
-  if (c < 0.26) {
-    // Shot 1: Aankomst over de Torenlaan langs de straatlantaarn, handwijzer & verlichte etalage
-    const k = smooth01(c / 0.26);
-    camera.position.set(-18.5 + 3.8 * k, 4.1 - 0.65 * k, 48.0 - 7.5 * k);
-    stuur.target.set(-28.0 + 17.5 * k, 1.5 + 0.35 * k, 35.5 - 8.5 * k);
-    if (porsche) {
-      const pPos = porsche.positie(new THREE.Vector3());
-      pPos.y += 0.85;
-      stuur.target.lerp(pPos, 0.50 + 0.25 * Math.sin(k * Math.PI));
-    }
-    camera.fov = hoekVoorScherm(36);
-    if (c < 0.24) bijschrift = 'Blaricum, laat op de avond. Een onopgeloste zaak…';
-  } else if (c < 0.51) {
-    // Shot 2: In de Porsche (2D duo-voorgrondcel) — live 3D camera glijdt langs Meentweg & verlicht hoekpand!
-    const k = (c - 0.26) / 0.25;
-    const camX = -7.0 + 27.5 * k;
-    const camZ = 27.2 - 19.2 * k;
-    camera.position.set(camX, 1.65, camZ);
-    stuur.target.set(camX - 11.5, 2.75, camZ - 16.0);
-    camera.fov = hoekVoorScherm(42);
-  } else if (c < 0.70) {
-    // Shot 3: Sfeervol het donkere Monastic-erf oprijden (volledig vloeiende bocht, nul plotse draai!)
-    const k = smooth01((c - 0.51) / 0.19);
-    camera.position.set(22.2 - 3.6 * k, 2.55 - 0.40 * k, 0.9 + 1.4 * k);
-    stuur.target.set(17.4 - 3.6 * k, 1.35 - 0.25 * k, -1.6 + 0.35 * k);
-    camera.fov = hoekVoorScherm(40 - 2 * k);
-    if (c < 0.67) bijschrift = 'Meentweg 1-a · Het donkere erf van Monastic.';
+  if (c < 0.44) {
+    // Shot 1: 100% VASTE camera op de straathoek met handwijzer, klinkerstraat & maan; de 911 zoeft vlot voorbij!
+    camera.position.set(-14.4, 2.35, 42.4);
+    stuur.target.set(-13.8, 2.55, 16.5);
+    camera.fov = hoekVoorScherm(38);
+    if (c < 0.41) bijschrift = '22:14 · Blaricum. Iemand in het dorp gaf je één adres — zonder bord aan de straat.';
+  } else if (c < 0.72) {
+    // Shot 2: Vaste lage camera op het donkere Monastic-erf (alleen het intercomlampje gloeit; ramen donker!)
+    camera.position.set(22.4, 2.15, 2.4);
+    stuur.target.set(11.6, 2.05, -0.8);
+    camera.fov = hoekVoorScherm(39);
+    if (c < 0.69) bijschrift = 'Achter de haag aan de Meentweg. Nieuw in het dorp — en alles lijkt donker.';
   } else if (c < 0.91) {
-    // Shot 4: Close-up op de bakstenen pier, wandlantaarn, zwarte film-noir slagschaduw & 2D Kuifje-hand op MONASTIC!
-    const k = smooth01((c - 0.70) / 0.21);
-    const afstand = 1.22 - 0.28 * k;
+    // Shot 3: Vaste close-up op het MONASTIC-bordje, film-noir schaduw over de bakstenen & hand aan de bel
+    const k = smooth01((c - 0.72) / 0.19);
+    const afstand = 1.18 - 0.16 * k;
     camera.position.copy(INTERCOM_POS)
       .addScaledVector(INTERCOM_NORMAAL, afstand)
-      .addScaledVector(MUUR_RECHTS, 0.06 - 0.05 * k)
-      .add(new THREE.Vector3(0, 0.04 - 0.045 * k, 0));
+      .addScaledVector(MUUR_RECHTS, 0.04)
+      .add(new THREE.Vector3(0, 0.02, 0));
     stuur.target.copy(INTERCOM_POS)
-      .addScaledVector(MUUR_RECHTS, 0.05 - 0.04 * k)
-      .add(new THREE.Vector3(0, 0.02 - 0.025 * k, 0));
-    camera.fov = hoekVoorScherm(34 - 2 * k);
+      .addScaledVector(MUUR_RECHTS, 0.03)
+      .add(new THREE.Vector3(0, 0.0, 0));
+    camera.fov = hoekVoorScherm(33);
   } else {
-    // Outro (0.91–1.00): camera zwaait vloeiend uit over het maanverlichte erf & geparkeerde Porsche -> vrij 3D!
+    // Outro (0.91–1.00): camera zwaait vloeiend uit over het donkere erf met ALLEEN de halverlichting aan -> vrij 3D!
     const k = smooth01((c - 0.91) / 0.09);
     tmpUitOog.copy(INTERCOM_POS)
-      .addScaledVector(INTERCOM_NORMAAL, 0.94)
-      .addScaledVector(MUUR_RECHTS, 0.01)
-      .add(new THREE.Vector3(0, -0.005, 0));
+      .addScaledVector(INTERCOM_NORMAAL, 1.02)
+      .addScaledVector(MUUR_RECHTS, 0.04)
+      .add(new THREE.Vector3(0, 0.02, 0));
     tmpUitDoel.copy(INTERCOM_POS)
-      .addScaledVector(MUUR_RECHTS, 0.01)
-      .add(new THREE.Vector3(0, -0.005, 0));
+      .addScaledVector(MUUR_RECHTS, 0.03);
     camera.position.lerpVectors(tmpUitOog, new THREE.Vector3(21.8, 2.65, 3.1), k);
     stuur.target.lerpVectors(tmpUitDoel, new THREE.Vector3(11.2, 2.1, -0.8), k);
-    camera.fov = hoekVoorScherm(32 + 7 * k);
+    camera.fov = hoekVoorScherm(33 + 6 * k);
   }
 
-  const celStand = celOverride || (inAutoCel ? 'porsche' : 'uit');
-  zetRegieUI(!!intro, celStand, bijschrift);
+  const celStand = celOverride || 'uit';
+  zetRegieUI(!!intro, celStand, bijschrift, deurFrame);
   camera.updateProjectionMatrix();
-  const kop = celStand === 'deur' ? ['Monastic · De Achterdeur', 'De maker opent de deur in het warme studiolicht'] :
-              c < 0.26 ? ['De Torenlaan · Nacht', 'Een leiblauwe Porsche 930 draait Blaricum in'] :
-              c < 0.51 ? ['Meentweg · In de Porsche', 'Kies het dossier voor jullie bezoek aan Monastic'] :
-              c < 0.70 ? ['Het erf · Monastic', 'De Porsche stuurt het donkere grind op en dooft het licht'] :
-              c < 0.84 ? ['Monastic · Achterdeur', 'Een bekende schaduw glijdt langs de muur'] :
-              c < 0.91 ? ['Monastic · Blaricum', 'Trrring… binnen springt het ganglicht aan'] :
-                         ['Het erf · Kantoor', 'Sleep om vrij door Blaricum te kijken'];
+  const kop = celStand === 'deur' ? ['Monastic · Blaricum', deurFrame === 0 ? 'Even stilte achter de donkere hal-deur…' : deurFrame === 1 ? 'Klik — de halverlichting springt aan' : 'Een schim stapt achter het ruitjesglas'] :
+              c < 0.44 ? ['De kruising · 22:14', 'Een 911 zoeft over de stille Blaricumse klinkers'] :
+              c < 0.72 ? ['Het erf · Meentweg', 'Het kantoor ligt er donker bij'] :
+              c < 0.91 ? ['Monastic · Intercom', 'Een schaduw langs de muur… trrring'] :
+                         ['Het erf · Monastic', 'Alleen de halverlichting brandt · sleep om rond te kijken'];
   werkCartoucheBij(kop[0], kop[1]);
-}
-
-function kiesDossier(sleutel) {
-  if (!intro) return;
-  intro.dossier = DOSSIERS[sleutel] ? sleutel : 'website';
-  intro.fase = 'reactie';
-  intro.t0 = performance.now();
-  toonKeuzes('', null);
-}
-
-function stapNaarKeuze1() {
-  if (!intro) return;
-  intro.fase = 'keuze1';
-  intro.t0 = performance.now();
-  toonKeuzes('', null);
 }
 
 function stapNaarOutro() {
@@ -2252,55 +2239,56 @@ function stapNaarOutro() {
 function werkInteractiefVerhaalBij(nu) {
   if (!intro) return;
   const elapsed = nu - intro.t0;
-  const dos = DOSSIERS[intro.dossier] || DOSSIERS.website;
 
   if (intro.fase === 'torenlaan') {
-    const f = Math.min(1, elapsed / 4500);
+    // Vlot & strak (3.0 s) terwijl de auto langs de vaste camera over de klinkers scheurt!
+    const f = Math.min(1, elapsed / 3000);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(f * 0.258);
-    if (f >= 1) { intro.fase = 'keuze1'; intro.t0 = nu; }
-  } else if (intro.fase === 'keuze1') {
-    // Live 3D Blaricum blijft rustig voorbijglijden langs de ramen terwijl de bezoeker een dossier kiest!
-    const lus = 0.265 + ((elapsed * 0.000018) % 0.14);
-    pasIntroFrameToe(lus, 'porsche');
-    toonBallon('bijrijder', 'De Compagnon', '“We zijn bijna bij Monastic op de Meentweg! Welk dossier leggen we vanavond op tafel?”');
-    toonKeuzes('keuze1', Object.entries(DOSSIERS).map(([sl, d]) => ({
-      label: d.label, titel: d.titel, sub: d.sub, actie: () => kiesDossier(sl),
-    })));
-  } else if (intro.fase === 'reactie') {
-    const f = Math.min(1, elapsed / 2600);
-    pasIntroFrameToe(0.38 + f * 0.125, 'porsche');
-    toonBallon('bestuurder', 'De Bezoeker', dos.reactie);
-    toonKeuzes('', null);
+    pasIntroFrameToe(f * 0.438);
     if (f >= 1) { intro.fase = 'oprit'; intro.t0 = nu; }
   } else if (intro.fase === 'oprit') {
-    const f = Math.min(1, elapsed / 3800);
+    const f = Math.min(1, elapsed / 3200);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(0.51 + f * 0.188);
+    pasIntroFrameToe(0.44 + f * 0.278);
     if (f >= 1) { intro.fase = 'aanbellen'; intro.t0 = nu; }
   } else if (intro.fase === 'aanbellen') {
-    const f = Math.min(1, elapsed / 3600);
+    const f = Math.min(1, elapsed / 3200);
     toonBallon('', '', '');
     toonKeuzes('', null);
-    pasIntroFrameToe(0.70 + f * 0.208);
+    pasIntroFrameToe(0.72 + f * 0.188);
     if (f >= 1) {
-      gangLichtAan = 1.0;
-      LICHT.uGangLicht.value = LICHT.uBrandt.value;
       intro.fase = 'deur';
       intro.t0 = nu;
     }
   } else if (intro.fase === 'deur') {
-    pasIntroFrameToe(0.91, 'deur');
-    toonBallon('maker', 'Monastic · De Maker', dos.maker);
-    toonKeuzes(`deur-${intro.dossier}`, [
-      { label: 'Vrij 3D', titel: 'Verken Blaricum in 3D →', sub: 'Sleep & zoom zelf over het maanverlichte erf', actie: () => stapNaarOutro() },
-      { label: 'Opnieuw', titel: 'Ander dossier kiezen', sub: 'Terug in de Porsche voor een andere verhaallijn', actie: () => stapNaarKeuze1() },
-      { label: dos.label, titel: dos.urlLabel, sub: 'Opent het echte aanbod in een nieuw tabblad', actie: () => { window.open(dos.url, '_blank', 'noopener'); stapNaarOutro(); } },
-    ]);
+    // 3-beat pixel-gelockte limited cel animatie:
+    //   0.00–0.65 s: Frame 0 (donkere hal-deur, alleen koperen buitenlampje)
+    //   0.65–1.45 s: Frame 1 (KLIK! halverlichting springt warm goud aan — lege hal)
+    //   1.45 s+    : Frame 2 (SNAP! anonieme schim achter het glas reikt naar de klink!)
+    const beat = elapsed < 650 ? 0 : (elapsed < 1450 ? 1 : 2);
+    if (beat >= 1) {
+      gangLichtAan = 1.0;
+      LICHT.uGangLicht.value = LICHT.uBrandt.value;
+    }
+    pasIntroFrameToe(0.91, 'deur', beat);
+    if (beat === 0) {
+      toonBallon('', '', '');
+      toonKeuzes('', null);
+    } else if (beat === 1) {
+      toonBallon('noir', 'Klik…', 'Binnen springt alleen de halverlichting aan.');
+      toonKeuzes('', null);
+    } else {
+      toonBallon('noir', 'Monastic · Nieuw in Blaricum', '“Achter de haag aan de Meentweg. Websites en digitaal maatwerk — voor werk dat niet op de rest lijkt.”');
+      toonKeuzes('deur-noir', [
+        { label: '01 · Het erf', titel: 'Verken het dorp in 3D →', sub: 'Sleep & zoom over de klinkers en het donkere erf', actie: () => stapNaarOutro() },
+        { label: '02 · Websites', titel: 'Websites & vaste prijzen ↗', sub: 'Eigen ontwerp vanaf € 1.450 excl. btw', actie: () => { window.open('https://monastic.nl/websites/', '_blank', 'noopener'); stapNaarOutro(); } },
+        { label: '03 · WordPress', titel: 'WordPress-check ↗', sub: 'Doorlichting met herstel (€ 249) of overstappen', actie: () => { window.open('https://monastic.nl/wordpress/', '_blank', 'noopener'); stapNaarOutro(); } },
+      ]);
+    }
   } else if (intro.fase === 'outro') {
-    const f = Math.min(1, elapsed / 1800);
+    const f = Math.min(1, elapsed / 1600);
     toonBallon('', '', '');
     toonKeuzes('', null);
     pasIntroFrameToe(0.91 + f * 0.09, 'uit');
@@ -2316,7 +2304,7 @@ function werkInteractiefVerhaalBij(nu) {
       const knop = document.getElementById('intro-knop');
       if (knop) { knop.setAttribute('aria-pressed', 'false'); knop.textContent = 'Intro'; }
       for (const k of document.querySelectorAll('[data-stand]')) k.setAttribute('aria-pressed', String(k.dataset.stand === 'erf'));
-      werkCartoucheBij('Het erf · Monastic', 'Sleep om vrij door Blaricum te kijken');
+      werkCartoucheBij('Het erf · Monastic', 'Alleen de halverlichting brandt · sleep om rond te kijken');
     }
   }
 }
@@ -2331,8 +2319,8 @@ function startIntro() {
     porsche.group.visible = true;
     porsche.zetMotorLicht(1);
   }
-  intro = { fase: 'torenlaan', t0: performance.now(), dossier: 'website' };
-  zetRegieUI(true, 'uit', 'Blaricum, laat op de avond. Een onopgeloste zaak…');
+  intro = { fase: 'torenlaan', t0: performance.now() };
+  zetRegieUI(true, 'uit', '22:14 · Blaricum. Iemand in het dorp gaf je één adres — zonder bord aan de straat.');
   toonBallon('', '', '');
   toonKeuzes('', null);
   const knop = document.getElementById('intro-knop');
@@ -2538,9 +2526,7 @@ async function begin() {
     [-1.76, 0.8, 16.12, 2.0], [3.16, 0.8, 12.90, 2.0], [-7.39, 0.8, 15.44, 2.0],
   ];
   const wandLantaarn = [
-    [8.25, 2.08, -1.62, 1.95],   // wandlantaarn boven de Monastic-intercom
-    [10.02, 1.95, 0.42, 2.65],   // warme gloed vanuit de centrale dubbele erfdeur & zijlichten
-    [11.96, 2.38, 3.52, 1.85],   // warme gloed vanuit het 4x2 bovenlicht van de linker paneeldeur
+    [8.25, 2.08, -1.62, 1.75],   // subtiele koperen wandlantaarn boven de Monastic-intercom
   ];
   const kringen = [...(model.lampen || []).map((q) => [...q, 4.25]), ...wandLantaarn, ...etalageGloed].slice(0, 40);
   kringen.forEach((q, i) => LICHT.uLamp.value[i].set(q[0], q[1], q[2], q[3]));
@@ -2592,12 +2578,12 @@ async function begin() {
   if (rondKnop) rondKnop.addEventListener('click', startRondleiding);
   stuur.addEventListener('start', () => { reis = null; stopRondleiding(); });
 
-  // Sneltoetsen: 1-3 kiezen een dossier tijdens de keuzemomenten, anders 1-7 voor standpunten, I voor verhaal, Esc overslaan.
+  // Sneltoetsen: 1-3 kiezen het vervolg bij de deur, anders 1-7 voor standpunten, I voor de openingsscène, Esc overslaan.
   const standLijst = ['hoekpand', 'kruising', 'wijzer', 'erf', 'straat', 'plein', 'dorp'];
   window.addEventListener('keydown', (ev) => {
     if (ev.target && /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.key === 'Escape' && intro) { slaIntroOver(); return; }
-    if (intro && (intro.fase === 'keuze1' || intro.fase === 'deur') && ev.key >= '1' && ev.key <= '3') {
+    if (intro && intro.fase === 'deur' && ev.key >= '1' && ev.key <= '3') {
       const fn = actieveKeuzeActies[Number(ev.key) - 1];
       if (fn) { ev.preventDefault(); fn(); return; }
     }
@@ -2606,7 +2592,7 @@ async function begin() {
     else if (ev.code === 'Space') { ev.preventDefault(); startRondleiding(); }
   });
 
-  // Speel het korte interactieve Kuifje-verhaal direct af bij openen (tenzij een vaste stand of ?afdruk is gevraagd).
+  // Speel de korte film-noir openingsscène direct af bij openen (tenzij een vaste stand of ?afdruk is gevraagd).
   if (!isAfdruk && !vraag.has('stand') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     startIntro();
   } else if (vraag.has('intro')) {
@@ -2625,6 +2611,8 @@ async function begin() {
   window.toon = (stand, stijl, licht) => {
     naar(stand, true);
     kleur(stijl, licht, true);
+    gangLichtAan = 1.0;
+    LICHT.uGangLicht.value = LICHT.uBrandt.value;
     if (porsche) { porsche.group.visible = true; porsche.uitlaatGroep.visible = false; porsche.zetIntroStand(1.0); porsche.zetMotorLicht(0); }
     if (belHand) belHand.zetReik(0, null);
     if (intercom) intercom.zetStaat(LICHT.uBrandt.value, 0, 0, gangLichtAan, -1);
@@ -2634,14 +2622,17 @@ async function begin() {
   window.toonIntro = (tNorm, stijl, licht) => {
     stopIntro(false); stopRondleiding();
     kleur(stijl, licht, true);
+    if (tNorm < 0.91) { gangLichtAan = 0; LICHT.uGangLicht.value = 0; }
     pasIntroFrameToe(tNorm);
     renderNu();
   };
-  window.toonVerhaalStap = (stap, dossier = 'website', stijl = 'bunker', licht = 'nacht') => {
+  window.toonVerhaalStap = (stap, elapsedMs = 1800, stijl = 'bunker', licht = 'nacht') => {
     stopIntro(false); stopRondleiding();
     kleur(stijl, licht, true);
+    gangLichtAan = 0;
+    LICHT.uGangLicht.value = 0;
     window._toonUIInAfdruk = true;
-    intro = { fase: stap, t0: performance.now() - 1200, dossier };
+    intro = { fase: stap, t0: performance.now() - elapsedMs };
     werkInteractiefVerhaalBij(performance.now());
     renderNu();
   };

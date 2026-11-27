@@ -121,10 +121,10 @@ const bunker = {
   vakken: {
     onbekend: ['#3a444e', '#262e38'],
     ondergrond: ['#1f382e', '#13241e'],
-    straat: ['#383644', '#262532'],
-    stoep: ['#595b68', '#3e404d'],
+    straat: ['#513c3e', '#37282b'],
+    stoep: ['#5e5a63', '#423f48'],
     erf: ['#636b70', '#454d54'],
-    parkeervak: ['#2f2e3b', '#20202b'],
+    parkeervak: ['#433236', '#2c2024'],
     grind: ['#727a7e', '#4f575e'],
     tuinpad: ['#61696f', '#444b52'],
     markering: ['#9fa69e', '#767d78'],
@@ -197,14 +197,14 @@ const bunker = {
 // egale zandsteen/baksteen-gevels, fris groen, rustig lichtgrijs wegdek en dezelfde constante 0.64-lijn.
 const klareDag = {
   naam: 'Dag',
-  lucht: '#9ec8e2', inkt: '#080a0b', papier: '#f4f0e4', wolk: '#ffffff', schaduwvlek: 0.12, lijn: 0.64, wolkvorm: 'band',
+  lucht: '#9ec8e2', inkt: '#080a0b', papier: '#f4f0e4', wolk: '#ffffff', schaduwvlek: 0.12, lijn: 0.78, wolkvorm: 'band',
   vakken: {
     onbekend: ['#dfd8c8', '#c6bfb0'],
     ondergrond: ['#8cb864', '#749e52'],
-    straat: ['#c4c0b6', '#aba79e'],
+    straat: ['#b88a78', '#997062'],
     stoep: ['#dedad0', '#c4c0b7'],
     erf: ['#cfc8b8', '#b5afa0'],
-    parkeervak: ['#b8b4aa', '#a09c93'],
+    parkeervak: ['#a67b6c', '#896457'],
     grind: ['#e2d8be', '#c7bea6'],
     tuinpad: ['#d8ceb8', '#bfb5a1'],
     markering: ['#fbfaf4', '#e0dfd8'],
