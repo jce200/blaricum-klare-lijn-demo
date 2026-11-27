@@ -328,8 +328,9 @@ export function bouwIntercom(gloedTex, uRes, uLijn) {
         belKlank.scale.setScalar(pop);
       }
 
-      raamGloed.visible = raamAan > 0.02;
-      raamMat.opacity = raamAan * 0.94;
+      const rEff = raamAan * brandt;
+      raamGloed.visible = rEff > 0.02;
+      raamMat.opacity = rEff * 0.94;
     },
   };
 }
@@ -443,16 +444,8 @@ export function bouwErfDetails() {
   const busMat = new THREE.MeshBasicMaterial({ color: 0x2e3740 });
   const fietsMat = new THREE.MeshBasicMaterial({ color: 0x11161c });
   const velgMat = new THREE.MeshBasicMaterial({ color: 0x6f7c88 });
-  const warmGlasMat = new THREE.MeshBasicMaterial({ color: 0xefc058, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide });
 
-  // 1. Warme bovenlicht-gloed over de volledige 4 bovenruitjes van Monastic's openslaande erfdeuren (renderOrder 4 -> zwarte kozijnlijnen tekenen er scherp overheen!)
-  const bovenPaneel = new THREE.Mesh(new THREE.PlaneGeometry(2.54, 0.56), warmGlasMat);
-  bovenPaneel.position.set(9.475 + INTERCOM_NORMAAL.x * 0.015, 2.48, 0.77 + INTERCOM_NORMAAL.z * 0.015);
-  bovenPaneel.rotation.y = INTERCOM_YAW;
-  bovenPaneel.renderOrder = 4;
-  groep.add(bovenPaneel);
-
-  // 2. Lage donkergroene buxusstruikjes langs de bakstenen plint bij het erf (zoals in paneel 3 van de collage!)
+  // 1. Lage donkergroene buxusstruikjes langs de bakstenen plint bij het erf (zoals in paneel 3 van de collage!)
   const struikPlekken = [
     [9.25, 0.23, -2.55, 0.32, 0.24],
     [9.58, 0.19, -2.95, 0.26, 0.20],
@@ -547,8 +540,6 @@ export function bouwErfDetails() {
   return {
     groep,
     zetNacht(nacht) {
-      bovenPaneel.visible = nacht > 0.2;
-      warmGlasMat.opacity = 0.78 * nacht;
       groen1Mat.color.copy(g1Dag).lerp(g1Nacht, nacht);
       groen2Mat.color.copy(g2Dag).lerp(g2Nacht, nacht);
       klikoMat.color.copy(klDag).lerp(klNacht, nacht);

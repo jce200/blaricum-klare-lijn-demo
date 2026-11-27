@@ -148,27 +148,30 @@ const SLAGCODE = `
       vec3 v = uLamp[i].xyz - p;
       float rad = uLamp[i].w;
       if (abs(n.y) < 0.45) {
-        // Op verticale gevels: zachte ronde warme lichtkring (geen harde platte balk, behoudt de rijke baksteenkleur!)
+        // Op verticale gevels: zachte, atmosferische warme gloed rond wandlamp en verlichte ramen (geen harde uitgeknipte schijf!)
         vec3 vw = vec3(v.x, v.y - 0.12, v.z);
-        float dw = length(vw) + golf * 0.6;
-        if (dw < rad * 0.92 && dot(n, v) > 0.0) {
-          k = max(k, dw < rad * 0.48 ? 0.34 : 0.17);
+        float dw = length(vw);
+        if (dw < rad * 1.18 && dot(n, v) > -0.10) {
+          float zacht = pow(1.0 - smoothstep(0.0, rad * 1.18, dw), 1.75);
+          k = max(k, zacht * 0.46);
         }
       } else {
         // Op de grond (asfalt/grind/stoep): krachtige, heldere Ligne Claire-lichtcirkel onder elke lantaarn!
         float d = length(v) + golf;
         if (d < rad && v.y > 0.22 && dot(n, v) > 0.0) {
-          k = max(k, d < rad * 0.58 ? 0.74 : 0.42);
+          k = max(k, d < rad * 0.58 ? 0.68 : 0.36);
         }
       }
     }
-    // 2. Warm licht dat na het aanbellen uit het gangraampje van Monastic schuin over het donkere grind valt.
-    if (uGangLicht > 0.05 && p.y < 0.35 && n.y > 0.65) {
-      vec2 dg = p.xz - vec2(9.2, -1.25);
-      float raamVal = step(-1.0, dg.x) * step(dg.x, 2.8) * step(-0.65, dg.y) * step(dg.y, 1.15);
-      if (raamVal > 0.5) {
-        float dr = length(dg * vec2(0.52, 0.90));
-        k = max(k, (dr < 0.78 ? 0.68 : 0.38) * uGangLicht);
+    // 2. Warm licht dat uit de verlichte erfdeuren en het gangraampje van Monastic over de visgraatklinkers en het grind valt.
+    if (p.y < 0.35 && n.y > 0.65 && p.x > 7.5 && p.x < 14.5 && p.z > -3.0 && p.z < 5.5) {
+      float dDeur = length((p.xz - vec2(10.35, 0.85)) * vec2(0.55, 0.45));
+      float deurGloed = pow(1.0 - smoothstep(0.0, 2.2, dDeur), 1.55) * 0.48;
+      k = max(k, deurGloed);
+      if (uGangLicht > 0.05) {
+        vec2 dg = p.xz - vec2(9.2, -1.25);
+        float dr = length(dg * vec2(0.55, 0.85));
+        k = max(k, pow(1.0 - smoothstep(0.0, 1.55, dr), 1.4) * 0.54 * uGangLicht);
       }
     }
     // 3. Porsche-koplampbundels op het wegdek: strakke Ligne Claire-lichtbundels vóór de voorbumper.
@@ -219,7 +222,7 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       vec3 k = palet[s * 2 + (licht ? 0 : 1)];
       float dist = length(cameraPosition - vP);
 
-      bool isRuit = (s == ${id.ruit_donker} || s == ${id.ruit_licht} || s == ${id.ruit_aan} || s == ${id.ruit_kantoor});
+      bool isRuit = (s == ${id.ruit_donker} || s == ${id.ruit_licht} || s == ${id.ruit_aan} || s == ${id.raamlicht} || s == ${id.ruit_kantoor});
       bool isBrandRuit = (s == ${id.ruit_aan} || s == ${id.raamlicht});
       bool isBoekRuit = (s == ${id.ruit_kantoor});
       bool isBaksteen = (s == ${id.baksteen_rood} || s == ${id.baksteen_bruin} || s == ${id.baksteen_geel});
@@ -231,33 +234,32 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
       if (isBaksteen && abs(n.y) < 0.35 && dist < 44.0) {
         float fadeB = 1.0 - smoothstep(18.0, 40.0, dist);
         float fwY = max(fwidth(vP.y), 0.0025);
-        float inPlint = 1.0 - smoothstep(0.38 - fwY, 0.38 + fwY, vP.y);
-        float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.38))) * (1.0 - smoothstep(26.0, 42.0, dist));
-        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.15, 0.18, 0.22) : vec3(0.55, 0.54, 0.51);
+        float inPlint = 1.0 - smoothstep(0.36 - fwY, 0.36 + fwY, vP.y);
+        float plintRand = (1.0 - smoothstep(0.0055 - fwY, 0.0055 + fwY, abs(vP.y - 0.36))) * (1.0 - smoothstep(26.0, 42.0, dist));
+        vec3 plintKleur = uBrandt > 0.5 ? vec3(0.18, 0.21, 0.25) : vec3(0.55, 0.54, 0.51);
         k = mix(k, plintKleur, inPlint * 0.85);
         k = mix(k, uInktKleur, plintRand * 0.88);
 
-        if (vP.y > 0.40 && fadeB > 0.02) {
+        if (vP.y > 0.38 && fadeB > 0.02) {
           vec3 tang = normalize(vec3(-n.z, 0.0, n.x));
           float u = dot(vP, tang), v = vP.y;
-          // Fijn Nederlands Waalformaat in rustig halfsteensverband (subtiele penlijn, nul vlekkerigheid!)
+          // Fijn Nederlands Waalformaat in rustig halfsteensverband (scherpe Rotring-penlijn zoals in het 4-luik!)
           float bh = 0.088, bw = 0.25;
           float rij = floor(v / bh);
           float uOff = u + mod(rij, 2.0) * (bw * 0.5);
           float kol = floor(uOff / bw);
           vec2 f = vec2(fract(uOff / bw), fract(v / bh));
-          // Subtiele 3%-steenwarmte zodat een muur leeft als handgekleurde strippagina
+          // Subtiele steen-tot-steen warmtevariatie zodat elke gevel handgekleurd oogt
           float hS = klHash(vec3(kol, rij, floor(dot(vP, n) * 2.0) + 11.3));
-          k *= 1.0 + (hS - 0.5) * 0.055 * fadeB;
+          k *= 1.0 + (hS - 0.5) * 0.085 * fadeB;
           float fwU = max(fwidth(uOff / bw), 0.010);
           float fwV = max(fwidth(v / bh), 0.016);
-          // Alleen zichtbaar wanneer de steenrijen op scherm niet dichtlopen (nul moiré!)
           float antiMoire = 1.0 - smoothstep(0.26, 0.52, fwV);
-          float hLijn = (1.0 - smoothstep(max(0.052, fwV * 0.9) - fwV, max(0.052, fwV * 0.9) + fwV, f.y));
-          float vLijn = (1.0 - smoothstep(max(0.028, fwU * 0.9) - fwU, max(0.028, fwU * 0.9) + fwU, f.x));
-          float voeg = max(hLijn * 0.88, vLijn * 0.65);
-          vec3 voegKleur = mix(uInktKleur, k * 0.35, 0.35);
-          k = mix(k, voegKleur, voeg * fadeB * antiMoire * 0.40);
+          float hLijn = (1.0 - smoothstep(max(0.055, fwV * 0.9) - fwV, max(0.055, fwV * 0.9) + fwV, f.y));
+          float vLijn = (1.0 - smoothstep(max(0.030, fwU * 0.9) - fwU, max(0.030, fwU * 0.9) + fwU, f.x));
+          float voeg = max(hLijn * 0.90, vLijn * 0.68);
+          vec3 voegKleur = mix(uInktKleur, k * 0.30, 0.28);
+          k = mix(k, voegKleur, voeg * fadeB * antiMoire * 0.48);
         }
       }
 
@@ -278,44 +280,49 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         float panRij = 1.0 - smoothstep(max(0.048, fwV * 1.0) - fwV, max(0.048, fwV * 1.0) + fwV, fd.y);
         float panNaad = (1.0 - smoothstep(max(0.040, fwU * 1.0) - fwU, max(0.040, fwU * 1.0) + fwU, fd.x)) * 0.65;
         float panLijn = max(panRij, panNaad);
-        k = mix(k, uInktKleur, panLijn * fadeD * antiMoireD * 0.44);
+        k = mix(k, uInktKleur, panLijn * fadeD * antiMoireD * 0.50);
       }
 
-      // 0c. Sfeervolle, vlijmscherpe 2-toons Ligne Claire nachtschaduwen op het Monastic-erf & de oprit!
+      // 0c. Rustige maanverlichte schaduwstroken langs de randen van het Monastic-erf (behoudt het lichte steengrijze grind!)
       if (uNacht > 0.5 && n.y > 0.80 && isGrind && vP.x > 6.5 && vP.x < 28.5 && vP.z > -9.5 && vP.z < 5.5) {
-        float muurSchaduw = 1.0 - smoothstep(10.8, 10.90, vP.x + vP.z * 0.22);
-        float garageSchaduw = (1.0 - smoothstep(-2.35, -2.25, vP.z + (vP.x - 16.0) * 0.12)) * smoothstep(11.0, 11.12, vP.x);
-        float hegSchaduw = smoothstep(0.65, 0.76, vP.z - (vP.x - 16.0) * 0.16) * (1.0 - smoothstep(23.1, 23.22, vP.x));
-        float hoekDiep = clamp(max(max(muurSchaduw, garageSchaduw), hegSchaduw), 0.0, 1.0);
-        k = mix(k, k * vec3(0.56, 0.61, 0.72), hoekDiep * 0.86);
+        float garageSchaduw = (1.0 - smoothstep(-2.45, -2.32, vP.z + (vP.x - 16.0) * 0.12)) * smoothstep(11.0, 11.15, vP.x);
+        float hegSchaduw = smoothstep(1.35, 1.48, vP.z - (vP.x - 16.0) * 0.16) * (1.0 - smoothstep(23.1, 23.22, vP.x));
+        float hoekDiep = clamp(max(garageSchaduw, hegSchaduw), 0.0, 1.0);
+        k = mix(k, k * vec3(0.68, 0.72, 0.80), hoekDiep * 0.65);
       }
 
-      // 0d. Fijne handgetekende klinker-/grindbestrating op het erf & enkele platte herfstblaadjes langs de stoep (4-luik!)
-      if (isGrind && n.y > 0.85 && dist < 24.0) {
-        float fadeG = 1.0 - smoothstep(10.0, 22.0, dist);
-        // Dicht langs de gevel van Monastic (x < 13.0): fijne getekende klinker-voeglijnen (paneel 3 van het 4-luik!)
-        if (vP.x > 7.0 && vP.x < 13.2 && vP.z > -5.5 && vP.z < 4.5) {
-          float kFade = fadeG * (1.0 - smoothstep(11.4, 13.0, vP.x));
-          vec2 kUv = vec2(vP.x * 4.2, vP.z * 2.2);
+      // 0d. Handgetekende visgraatklinkers langs Monastic & lichte grindkorrels op het erf (zoals in paneel 1 & 3 van het 4-luik!)
+      if (isGrind && n.y > 0.85 && dist < 28.0) {
+        float fadeG = 1.0 - smoothstep(12.0, 26.0, dist);
+        // Strook van ~1,65 m langs de schuine achtergevel van Monastic (dn < 1.65 m): warme klinkerbestrating!
+        float dnErf = (vP.x - 8.16) * 0.8364 + (vP.z + 1.52) * (-0.5481);
+        float dsErf = (vP.x - 8.16) * 0.5481 + (vP.z + 1.52) * 0.8364;
+        if (dnErf > -0.25 && dnErf < 1.68 && dsErf > -2.0 && dsErf < 8.6) {
+          vec3 klinkTint = uNacht > 0.5 ? vec3(0.32, 0.34, 0.39) : vec3(0.74, 0.66, 0.58);
+          k = mix(k, klinkTint, 0.72);
+          float fwR = max(fwidth(dnErf), 0.008);
+          float randLijn = 1.0 - smoothstep(0.025 - fwR, 0.025 + fwR, abs(dnErf - 1.65));
+          k = mix(k, uInktKleur, randLijn * fadeG * 0.78);
+          vec2 kUv = vec2(dnErf * 4.4, dsErf * 2.2);
           float rK = floor(kUv.x);
           vec2 kf = vec2(fract(kUv.x), fract(kUv.y + mod(rK, 2.0) * 0.5));
-          float fwX = max(fwidth(kUv.x), 0.015), fwZ = max(fwidth(kUv.y), 0.015);
-          float am = 1.0 - smoothstep(0.22, 0.40, max(fwX, fwZ));
+          float fwX = max(fwidth(kUv.x), 0.014), fwZ = max(fwidth(kUv.y), 0.014);
+          float am = 1.0 - smoothstep(0.24, 0.45, max(fwX, fwZ));
           float kx = 1.0 - smoothstep(max(0.055, fwX) - fwX, max(0.055, fwX) + fwX, kf.x);
-          float kz = 1.0 - smoothstep(max(0.045, fwZ) - fwZ, max(0.045, fwZ) + fwZ, kf.y);
-          k = mix(k, uInktKleur, max(kx, kz * 0.7) * kFade * am * 0.30);
+          float kz = 1.0 - smoothstep(max(0.048, fwZ) - fwZ, max(0.048, fwZ) + fwZ, kf.y);
+          k = mix(k, uInktKleur, max(kx, kz * 0.75) * fadeG * am * 0.42);
         } else {
-          // Buiten de klinkerstrook: spaarzame fijne Hergé-grindstreepjes & kleine steentjes
-          vec2 gCel = floor(vP.xz * 2.2);
-          vec2 gF = fract(vP.xz * 2.2);
+          // Buiten de klinkerstrook: fijne handgetekende Kuifje-grindstreepjes & steentjes over het erf!
+          vec2 gCel = floor(vP.xz * 2.4);
+          vec2 gF = fract(vP.xz * 2.4);
           float hC = klHash(vec3(gCel, 9.4));
-          if (hC > 0.84) {
-            float ox = 0.25 + 0.50 * klHash(vec3(gCel, 1.7));
-            float oz = 0.25 + 0.50 * klHash(vec3(gCel, 5.3));
+          if (hC > 0.74) {
+            float ox = 0.22 + 0.56 * klHash(vec3(gCel, 1.7));
+            float oz = 0.22 + 0.56 * klHash(vec3(gCel, 5.3));
             float fw = max(fwidth(gF.y), 0.008);
-            float streep = (1.0 - smoothstep(0.015 - fw, 0.015 + fw, abs(gF.y - oz)))
-                         * (1.0 - smoothstep(0.11 - fw, 0.11 + fw, abs(gF.x - ox)));
-            k = mix(k, uInktKleur, streep * fadeG * 0.45);
+            float streep = (1.0 - smoothstep(0.018 - fw, 0.018 + fw, abs(gF.y - oz)))
+                         * (1.0 - smoothstep(0.10 - fw, 0.10 + fw, abs(gF.x - ox)));
+            k = mix(k, uInktKleur, streep * fadeG * 0.52);
           }
         }
       } else if ((s == ${id.stoep} || s == ${id.straat}) && n.y > 0.85 && dist < 24.0) {
@@ -370,8 +377,10 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         float band2 = smoothstep(0.29 - fw, 0.29 + fw, g) * (1.0 - smoothstep(0.33 - fw, 0.33 + fw, g));
         float glans = clamp(band1 + band2, 0.0, 1.0);
         if (uBrandt < 0.5) {
-          vec3 hemelGlans = mix(k, vec3(0.88, 0.93, 0.96), 0.42);
-          k = mix(k, hemelGlans, glans);
+          // Overdag koel fris stripglas (ook voor de Monastic-ramen zodat ze overdag geen geel licht geven!)
+          vec3 dagGlas = isBrandRuit ? vec3(0.28, 0.39, 0.48) : k;
+          vec3 hemelGlans = mix(dagGlas, vec3(0.88, 0.93, 0.96), 0.42);
+          k = mix(dagGlas, hemelGlans, glans);
           if (isBoekRuit) {
             float boven = smoothstep(2.60, 2.66, vP.y);
             k = mix(k, k * 0.78, boven);
@@ -380,19 +389,16 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
           // Gedempte avond-etalage van de Blaricumsche Boekhandel: donker winkelglas met alleen subtiele warme onderverlichting!
           vec3 donkerWinkel = vec3(0.10, 0.15, 0.21);
           float onderEtalage = (1.0 - smoothstep(1.35, 2.25, vP.y)) * smoothstep(0.42, 0.56, vP.y);
-          // Enkele zachte etalage-spotjes verspreid over de ramen (niet de hele winkel fel verlicht!)
           float spotGolf = 0.5 + 0.5 * sin(vP.x * 0.95 + vP.z * 0.65);
           float spot = smoothstep(0.35, 0.85, spotGolf);
           vec3 warmEtalage = vec3(0.48, 0.38, 0.23);
           k = mix(donkerWinkel, warmEtalage, onderEtalage * (0.28 + 0.42 * spot));
-          // Subtiele diagonale avondreflectie op het donkere bovenglas
           k = mix(k, vec3(0.24, 0.34, 0.44), glans * 0.34);
         } else if (isBrandRuit) {
-          // Warm honinggoud interieurlicht zoals in de 4-luik collage (iets dieper bovenaan, lichtend hart)
-          vec3 honing = vec3(0.95, 0.76, 0.36);
-          float boven = smoothstep(2.35, 2.55, vP.y);
-          k = mix(honing, vec3(0.68, 0.51, 0.24), boven * 0.42);
-          k = mix(k, vec3(0.99, 0.90, 0.62), glans * 0.34);
+          // Warm honinggoud interieurlicht zoals in de 4-luik collage (rijke amber-gloed per ruitje!)
+          vec3 honing = vec3(0.96, 0.77, 0.35);
+          vec3 hart = vec3(0.99, 0.88, 0.54);
+          k = mix(honing, hart, glans * 0.45);
         } else {
           float maanRuit = smoothstep(0.10, 0.45, dot(n, uMaanDir));
           vec3 spiegel = mix(vec3(0.20, 0.31, 0.41), vec3(0.33, 0.46, 0.58), maanRuit);
@@ -400,11 +406,12 @@ const vlakShader = (vakken, id) => new THREE.ShaderMaterial({
         }
       }
 
-      // 3. Lamplicht bij nacht: straatlantaarns, subtiele etalagegloed, Monastic-wandlantaarn, ganglicht & Porsche-koplampen.
+      // 3. Lamplicht bij nacht: straatlantaarns, zachte warme gloed op baksteen rond wandlamp & verlichte erfdeuren, & Porsche-koplampen.
       if (!isBrandRuit && !isBoekRuit) {
         float lp = klLamp(vP, n);
         if (lp > 0.001) {
-          k = mix(k, uLampKleur, lp);
+          vec3 warmSpill = abs(n.y) < 0.45 ? mix(k * vec3(1.55, 1.32, 0.92), vec3(0.95, 0.72, 0.36), 0.38) : uLampKleur;
+          k = mix(k, warmSpill, lp);
         }
       }
 
@@ -2464,7 +2471,11 @@ async function begin() {
   const etalageGloed = [
     [-1.76, 0.8, 16.12, 2.0], [3.16, 0.8, 12.90, 2.0], [-7.39, 0.8, 15.44, 2.0],
   ];
-  const wandLantaarn = [[8.25, 2.08, -1.62, 1.95]];
+  const wandLantaarn = [
+    [8.25, 2.08, -1.62, 1.95],   // wandlantaarn boven de Monastic-intercom
+    [10.02, 1.95, 0.42, 2.65],   // warme gloed vanuit de centrale dubbele erfdeur & zijlichten
+    [11.96, 2.38, 3.52, 1.85],   // warme gloed vanuit het 4x2 bovenlicht van de linker paneeldeur
+  ];
   const kringen = [...(model.lampen || []).map((q) => [...q, 5.9]), ...wandLantaarn, ...etalageGloed].slice(0, 40);
   kringen.forEach((q, i) => LICHT.uLamp.value[i].set(q[0], q[1], q[2], q[3]));
   LICHT.uLampN.value = kringen.length;
