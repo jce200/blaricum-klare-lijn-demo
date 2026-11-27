@@ -53,15 +53,6 @@ body {
 }
 #doek { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 #doek:active { cursor: grabbing; }
-.kader::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.11;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.24 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23k)'/%3E%3C/svg%3E");
-}
 .melding {
   position: absolute;
   left: 18px;
@@ -108,19 +99,11 @@ body {
 
 .kader.in-regie #doek { cursor: default; }
 
-/* Live Sfeer-overlays over het 3D-canvas:
+/* Live Sfeer-overlays direct op het 3D-canvas (GEEN z-index op .sfeer-textuur -> geen stacking-context isolatie, dus echte multiply/soft-light zonder witte waas!):
    - data-sfeer="noir"  (A): 35mm film-noir korrel, vignet & petrol/amber contrast
-   - data-sfeer="album" (B): warm gedrukt stripalbum met papiervezel, subtiel schaduwraster & zwart kader */
-.sfeer-laag {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  overflow: hidden;
-}
-.sfeer-laag::before,
-.sfeer-laag::after {
-  content: "";
+   - data-sfeer="album" (B): warm gedrukt stripalbum met echte multiply-papiervezel, subtiel schaduwraster & zwart kader */
+.sfeer-textuur,
+.sfeer-vignet {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -128,38 +111,39 @@ body {
 
 /* Preset A: 35mm Film-noir korrel + vignet */
 .kader[data-sfeer="noir"] #doek {
-  filter: contrast(1.13) saturate(0.88);
+  filter: contrast(1.16) saturate(0.86);
 }
-.kader[data-sfeer="noir"] .sfeer-laag::before {
-  background: radial-gradient(ellipse at 50% 48%, transparent 44%, rgba(4, 10, 18, 0.56) 100%);
-}
-.kader[data-sfeer="noir"] .sfeer-laag::after {
-  opacity: 0.24;
+.kader[data-sfeer="noir"] .sfeer-textuur {
   mix-blend-mode: soft-light;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.42;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
 }
+.kader[data-sfeer="noir"] .sfeer-vignet {
+  background: radial-gradient(ellipse at 50% 48%, transparent 40%, rgba(4, 9, 16, 0.62) 100%);
+}
 
-/* Preset B: Gedrukt Belgisch stripalbum (warm papier + subtiel raster + stripkader) */
+/* Preset B: Gedrukt Belgisch stripalbum (echte multiply-papiertextuur zonder witte waas + raster + stripkader) */
 .kader[data-sfeer="album"] #doek {
-  filter: contrast(1.07) sepia(0.08);
+  filter: contrast(1.10) saturate(1.04);
 }
-.kader[data-sfeer="album"] .sfeer-laag::before {
-  background:
-    radial-gradient(ellipse at 50% 48%, transparent 56%, rgba(16, 18, 22, 0.34) 100%),
-    radial-gradient(rgba(10, 14, 20, 0.14) 0.75px, transparent 0.75px);
-  background-size: 100% 100%, 4px 4px;
-  box-shadow: inset 0 0 0 3px #070a0d, inset 0 0 0 9px rgba(243, 237, 224, 0.92), inset 0 0 0 11px #070a0d;
-}
-.kader[data-sfeer="album"] .sfeer-laag::after {
-  opacity: 0.26;
+.kader[data-sfeer="album"] .sfeer-textuur {
   mix-blend-mode: multiply;
-  background-color: #f3ead4;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity: 1;
+  background-color: #faf3e3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0.14 0 0 0 0.85  0 0.14 0 0 0.83  0 0 0.14 0 0.78  0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)'/%3E%3C/svg%3E");
   background-size: 220px 220px;
 }
+.kader[data-sfeer="album"] .sfeer-vignet {
+  background:
+    radial-gradient(ellipse at 50% 48%, transparent 50%, rgba(12, 16, 22, 0.38) 100%),
+    radial-gradient(rgba(8, 12, 18, 0.17) 0.75px, transparent 0.75px);
+  background-size: 100% 100%, 4px 4px;
+  box-shadow: inset 0 0 0 2px #070a0d, inset 0 0 0 9px #f3ede0, inset 0 0 0 11px #070a0d;
+}
 
-.kader[data-sfeer="uit"] .sfeer-laag { display: none; }
+.kader[data-sfeer="uit"] .sfeer-textuur,
+.kader[data-sfeer="uit"] .sfeer-vignet { display: none; }
 
 @keyframes celFadeIn {
   from { opacity: 0; }

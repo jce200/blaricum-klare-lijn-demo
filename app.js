@@ -2663,6 +2663,7 @@ async function begin() {
   };
 
   let beelden = 0, vorige = performance.now(), traagste = 0;
+  if (isAfdruk) { renderNu(); return; }
   renderer.setAnimationLoop((nu) => {
     const sec = isAfdruk ? 0 : nu * 0.001;
     LICHT.uTijd.value = sec;
